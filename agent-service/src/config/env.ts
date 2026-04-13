@@ -13,10 +13,8 @@ const EnvSchema = z.object({
 
   HASHKEY_TESTNET_RPC_URL: z.string().url().default("https://rpc.testnet.hashkey.cloud"),
   HASHKEY_TESTNET_CHAIN_ID: z.coerce.number().int().positive().default(133),
-  PRIVATE_KEY: z
-    .string()
-    .regex(/^0x[a-fA-F0-9]{64}$/)
-    .default("0x59c6995e998f97a5a0044966f094538f9dc9ac7e2b6fb8f3f7f4a15a17f5d8d8"),
+  AGENT_WALLET_RPC_URL: z.string().url().default("http://127.0.0.1:8545"),
+  AGENT_ACCOUNT_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000011"),
 
   DEFI_ADAPTER_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000001"),
   POLICY_REGISTRY_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000002"),
@@ -87,7 +85,8 @@ export type PatriconConfig = {
   chain: {
     rpcUrl: string;
     chainId: number;
-    privateKey: string;
+    walletRpcUrl: string;
+    accountAddress: string;
   };
   contracts: {
     defiAdapter: string;
@@ -159,7 +158,8 @@ export const config: PatriconConfig = {
   chain: {
     rpcUrl: env.HASHKEY_TESTNET_RPC_URL,
     chainId: env.HASHKEY_TESTNET_CHAIN_ID,
-    privateKey: env.PRIVATE_KEY
+    walletRpcUrl: env.AGENT_WALLET_RPC_URL,
+    accountAddress: env.AGENT_ACCOUNT_ADDRESS
   },
   contracts: {
     defiAdapter: env.DEFI_ADAPTER_ADDRESS,

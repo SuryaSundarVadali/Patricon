@@ -1,5 +1,7 @@
 import { Link, Route, Routes } from "react-router-dom";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { WalletPanel } from "./components/WalletPanel";
+import { WalletActionsPanel } from "./components/WalletActionsPanel";
 import { OverviewPage } from "./pages/OverviewPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { PoliciesPage } from "./pages/PoliciesPage";
@@ -22,6 +24,7 @@ export default function App() {
         <Link to="/activity">Activity / Proofs</Link>
       </nav>
       <main>
+        <WalletPanel />
         {loading && <section className="panel"><p>Loading dashboard data...</p></section>}
         {error && !loading && (
           <section className="panel error">
@@ -30,12 +33,15 @@ export default function App() {
           </section>
         )}
         {data && !loading && !error && (
-          <Routes>
-            <Route path="/" element={<OverviewPage data={data} />} />
+          <>
+            <WalletActionsPanel data={data} />
+            <Routes>
+              <Route path="/" element={<OverviewPage data={data} />} />
             <Route path="/agents" element={<AgentsPage data={data} />} />
             <Route path="/policies" element={<PoliciesPage data={data} />} />
             <Route path="/activity" element={<ProofsPage data={data} />} />
-          </Routes>
+            </Routes>
+          </>
         )}
       </main>
     </div>

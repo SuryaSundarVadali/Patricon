@@ -18,7 +18,11 @@ This package provides a professional monitoring interface for Patricon agents, p
 	- PolicyRegistry
 	- PolicyEnforcedDeFiAdapter
 
-The dashboard is read-only and does not submit transactions.
+- Uses `wagmi` + `viem` for non-custodial wallet connection and signing for dashboard-triggered actions.
+- Supports both EOAs and ERC-4337 compatible smart accounts (for example Safe-based accounts).
+
+The dashboard can submit operator actions only through a connected wallet signer.
+It never stores or requests raw private keys.
 
 ## Scripts
 
@@ -33,3 +37,9 @@ The dashboard is read-only and does not submit transactions.
 - `Agents`: registered agents, type hash, linked policy hash, and last action.
 - `Policies`: policy hash, versioning, and status.
 - `Activity / Proofs`: recent proof-gated execution events and transaction metadata.
+
+## Wallet model
+
+- Connection options include MetaMask, Rabby/Phantom EVM via injected providers, WalletConnect-compatible wallets, and Safe smart accounts where available.
+- All writes initiated from the UI are signed by the connected wallet.
+- Private-key based signing is out of scope for production usage.

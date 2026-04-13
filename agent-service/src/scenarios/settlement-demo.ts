@@ -7,10 +7,11 @@ import { PolicyProofService } from "../zk/policy-proof-service.js";
 
 async function main(): Promise<void> {
   const logger = new StructuredLogger("patricon.settlement-demo");
-  const clients = createHashKeyClients({
+  const clients = await createHashKeyClients({
     rpcUrl: config.chain.rpcUrl,
     chainId: config.chain.chainId,
-    privateKey: config.chain.privateKey,
+    walletRpcUrl: config.chain.walletRpcUrl,
+    accountAddress: config.chain.accountAddress,
     defiAdapterAddress: config.contracts.defiAdapter,
     settlementConnectorAddress: config.contracts.settlementConnector
   });

@@ -40,10 +40,23 @@ This package runs deterministic rule-based agents that generate Groth16 proofs a
 
 ## Required Environment Variables
 
-- Chain and credentials:
+
+Configuration and runtime
+
+Use environment variables (`.env`) for:
+- RPC URL,
+- Wallet signer endpoint and agent account address,
+- Addresses for verifiers, registries, DeFi adapter, settlement connector,
+- Strategy parameters (thresholds, limits).
+
+Do not load or store any private keys from `.env`. The agent-service obtains a signer from a connected wallet surface (for example MetaMask, Phantom EVM, WalletConnect, Safe, ZeroDev, Biconomy, or equivalent wallet infrastructure) through a non-custodial RPC/provider flow.
+All transactions are signed by that wallet. The service never handles raw private keys directly.
+
+- Chain and wallet session:
 	- `HASHKEY_TESTNET_RPC_URL`
 	- `HASHKEY_TESTNET_CHAIN_ID`
-	- `PRIVATE_KEY`
+	- `AGENT_WALLET_RPC_URL`
+	- `AGENT_ACCOUNT_ADDRESS`
 - Contract addresses:
 	- `DEFI_ADAPTER_ADDRESS`
 	- `POLICY_REGISTRY_ADDRESS`
@@ -76,6 +89,8 @@ Set either:
 - `AGENT_MODE=simulated`
 
 In dry run mode, the service executes strategy and proof generation but skips on-chain transaction submission.
+
+Patricon's agent-service operates in a non-custodial mode. Operators connect a wallet and approve transactions; the service never stores or has access to private keys.
 
 ## Settlement flow
 

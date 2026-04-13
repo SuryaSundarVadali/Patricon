@@ -88,3 +88,11 @@ The file includes deployed addresses for:
 	- `PaymentExecuted`
 
 This keeps settlement execution aligned with the same policy constraints used for DeFi actions.
+
+## Account model compatibility
+
+Patricon contracts are designed to work with both EOAs and ERC-4337 smart accounts.
+
+- Contract calls must not depend on `tx.origin`.
+- Agent identity and policy mappings are address-based and can represent smart account addresses.
+- UserOperation and EntryPoint-based execution is expected to be handled by external ERC-4337 infrastructure.
