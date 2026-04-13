@@ -1,6 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import path from "node:path";
 
 export default defineConfig({
-  plugins: [react()]
+  plugins: [react()],
+  define: {
+    __PATRICON_CONFIG_DIR__: JSON.stringify(path.resolve(__dirname, "../config"))
+  },
+  server: {
+    fs: {
+      allow: [".."]
+    }
+  }
 });

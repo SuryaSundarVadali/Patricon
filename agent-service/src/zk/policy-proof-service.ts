@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { fullProve } from "./snarkjs-client.js";
+import { fullProve, verifyProof } from "./snarkjs-client.js";
 import type {
   ActionProofBundle,
   IdentityWitnessInput,
-  PolicyWitnessInput
+  PolicyWitnessInput,
+  VerifiedProofBundle
 } from "./types.js";
 
 export type ProofActionContext = {
@@ -45,6 +46,8 @@ export class PolicyProofService {
   private previousCumulativeVolume: bigint;
   private previousTradeTimestamp: bigint;
   private previousNonce: bigint;
+  private identityVerificationKey: Record<string, unknown> | null = null;
+  private policyVerificationKey: Record<string, unknown> | null = null;
 
   constructor(private readonly config: PolicyProofServiceConfig) {
     this.previousCumulativeVolume = config.stateSeed.previousCumulativeVolume;
@@ -62,24 +65,23 @@ export class PolicyProofService {
       this.config.artifacts.policyVerificationKeyPath
     ];
 
-    await Promise.all(paths.map(async (artifactPath) => readFile(artifactPath)));
+    const fileContents = await Promise.all(paths.map(async (artifactPath) => readFile(artifactPath, "utf8")));
+    this.identityVerificationKey = JSON.parse(fileContents[2]);
+    this.policyVerificationKey = JSON.parse(fileContents[5]);
   }
 
   async generateActionProofs(action: ProofActionContext): Promise<ActionProofBundle> {
     const identityWitness = this.buildIdentityWitness();
-    const policyWitness = this.buildPolicyWitness(action);
 
-    const identity = await fullProve(
+    const identityRaw = await fullProve(
       identityWitness as unknown as Record<string, unknown>,
       this.config.artifacts.identityWasmPath,
       this.config.artifacts.identityZkeyPath
     );
 
-    const policy = await fullProve(
-      policyWitness as unknown as Record<string, unknown>,
-      this.config.artifacts.policyWasmPath,
-      this.config.artifacts.policyZkeyPath
-    );
+    const policyRaw = await this.generatePolicyProof(action, false);
+
+    const identity = await this.toVerifiedProof(identityRaw, "identity");
 
     this.previousCumulativeVolume += action.tradeAmount;
     this.previousTradeTimestamp = action.timestamp;
@@ -87,7 +89,51 @@ export class PolicyProofService {
 
     return {
       identity,
-      policy
+      policy: policyRaw
+    };
+  }
+
+  async generatePolicyProof(action: ProofActionContext, updateState: boolean = true): Promise<VerifiedProofBundle> {
+    const policyWitness = this.buildPolicyWitness(action);
+    const policyRaw = await fullProve(
+      policyWitness as unknown as Record<string, unknown>,
+      this.config.artifacts.policyWasmPath,
+      this.config.artifacts.policyZkeyPath
+    );
+
+    const verifiedPolicy = await this.toVerifiedProof(policyRaw, "policy");
+
+    if (updateState) {
+      this.previousCumulativeVolume += action.tradeAmount;
+      this.previousTradeTimestamp = action.timestamp;
+      this.previousNonce = action.tradeNonce;
+    }
+
+    return verifiedPolicy;
+  }
+
+  getCurrentState(): { previousCumulativeVolume: bigint; previousTradeTimestamp: bigint; previousNonce: bigint } {
+    return {
+      previousCumulativeVolume: this.previousCumulativeVolume,
+      previousTradeTimestamp: this.previousTradeTimestamp,
+      previousNonce: this.previousNonce
+    };
+  }
+
+  private async toVerifiedProof(
+    bundle: { proof: { pA: [bigint, bigint]; pB: [[bigint, bigint], [bigint, bigint]]; pC: [bigint, bigint] }; publicSignals: bigint[]; elapsedMs: number },
+    circuit: "identity" | "policy"
+  ): Promise<VerifiedProofBundle> {
+    const verificationKey = circuit === "identity" ? this.identityVerificationKey : this.policyVerificationKey;
+    if (!verificationKey) {
+      throw new Error(`Verification key not loaded for ${circuit} circuit. Call assertArtifactsExist first.`);
+    }
+
+    const verified = await verifyProof(verificationKey, bundle.publicSignals, bundle.proof);
+
+    return {
+      ...bundle,
+      verified
     };
   }
 

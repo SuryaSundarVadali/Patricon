@@ -14,6 +14,13 @@ The stack uses Circom 2.x, Groth16, BN254, and Poseidon-based primitives.
 - `policy/`
 	- `yield_policy_enforcement.circom`: Rule-based yield-farming constraints with accumulator updates.
 
+## Integration with Patricon
+
+- Proof artifacts generated here are consumed by:
+	- `contracts/` verifier contracts (`VerifierIdentity`, `VerifierPolicy`).
+	- `agent-service/` proof generation bindings (`snarkjs fullProve`).
+	- `dashboard/` indirectly through proof-gated activity events emitted by contracts.
+
 ## Identity circuit interface
 
 Circuit: `identity/agent_registry_membership.circom`

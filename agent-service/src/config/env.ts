@@ -24,6 +24,11 @@ const EnvSchema = z.object({
   IDENTITY_VERIFIER_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000004"),
   POLICY_VERIFIER_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000005"),
   SETTLEMENT_CONNECTOR_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000006"),
+  SETTLEMENT_PAYEE_ADDRESS: AddressSchema.default("0x00000000000000000000000000000000000000AA"),
+  SETTLEMENT_PAYER_ADDRESS: AddressSchema.optional(),
+  SETTLEMENT_ASSET_ADDRESS: AddressSchema.default("0x00000000000000000000000000000000000000BB"),
+  SETTLEMENT_TOKEN_ID: z.coerce.bigint().default(11n),
+  SETTLEMENT_SHARE_BPS: z.coerce.number().int().min(1).max(10_000).default(5_000),
 
   APY_DEPOSIT_THRESHOLD_BPS: z.coerce.number().int().positive().default(1_000),
   APY_WITHDRAW_THRESHOLD_BPS: z.coerce.number().int().positive().default(700),
@@ -92,6 +97,13 @@ export type PatriconConfig = {
     policyVerifier: string;
     settlementConnector: string;
   };
+  settlement: {
+    payee: string;
+    payerOverride?: string;
+    asset: string;
+    tokenId: bigint;
+    shareBps: number;
+  };
   strategy: {
     apyDepositThresholdBps: number;
     apyWithdrawThresholdBps: number;
@@ -156,6 +168,13 @@ export const config: PatriconConfig = {
     identityVerifier: env.IDENTITY_VERIFIER_ADDRESS,
     policyVerifier: env.POLICY_VERIFIER_ADDRESS,
     settlementConnector: env.SETTLEMENT_CONNECTOR_ADDRESS
+  },
+  settlement: {
+    payee: env.SETTLEMENT_PAYEE_ADDRESS,
+    payerOverride: env.SETTLEMENT_PAYER_ADDRESS,
+    asset: env.SETTLEMENT_ASSET_ADDRESS,
+    tokenId: env.SETTLEMENT_TOKEN_ID,
+    shareBps: env.SETTLEMENT_SHARE_BPS
   },
   strategy: {
     apyDepositThresholdBps: env.APY_DEPOSIT_THRESHOLD_BPS,

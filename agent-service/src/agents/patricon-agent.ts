@@ -55,6 +55,8 @@ export class PatriconAgent {
       this.logger.info("Proofs generated", {
         identityProofMs: proofs.identity.elapsedMs,
         policyProofMs: proofs.policy.elapsedMs,
+        identityVerified: proofs.identity.verified,
+        policyVerified: proofs.policy.verified,
         policySignals: proofs.policy.publicSignals.map((s) => s.toString())
       });
 

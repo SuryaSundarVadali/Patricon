@@ -13,7 +13,8 @@ async function main(): Promise<void> {
     rpcUrl: config.chain.rpcUrl,
     chainId: config.chain.chainId,
     privateKey: config.chain.privateKey,
-    defiAdapterAddress: config.contracts.defiAdapter
+    defiAdapterAddress: config.contracts.defiAdapter,
+    settlementConnectorAddress: config.contracts.settlementConnector
   });
 
   const signerAddress = await clients.signer.getAddress();

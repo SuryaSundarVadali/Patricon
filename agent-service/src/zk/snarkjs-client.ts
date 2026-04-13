@@ -10,6 +10,8 @@ type FullProveResult = {
   publicSignals: string[];
 };
 
+type VerificationKey = Record<string, unknown>;
+
 function parseProof(proof: FullProveResult["proof"]): Groth16Proof {
   return {
     pA: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
@@ -57,4 +59,31 @@ export async function fullProve(
     publicSignals: result.publicSignals.map((s) => BigInt(s)),
     elapsedMs: Date.now() - startedAt
   };
+}
+
+function toSnarkjsProofFormat(proof: Groth16Proof): FullProveResult["proof"] {
+  return {
+    pi_a: [proof.pA[0].toString(), proof.pA[1].toString(), "1"],
+    pi_b: [
+      [proof.pB[0][1].toString(), proof.pB[0][0].toString()],
+      [proof.pB[1][1].toString(), proof.pB[1][0].toString()],
+      ["1", "0"]
+    ],
+    pi_c: [proof.pC[0].toString(), proof.pC[1].toString(), "1"]
+  };
+}
+
+/**
+ * Verifies a Groth16 proof against the provided verification key.
+ */
+export async function verifyProof(
+  verificationKey: VerificationKey,
+  publicSignals: bigint[],
+  proof: Groth16Proof
+): Promise<boolean> {
+  return snarkjs.groth16.verify(
+    verificationKey,
+    publicSignals.map((v) => v.toString()),
+    toSnarkjsProofFormat(proof)
+  );
 }

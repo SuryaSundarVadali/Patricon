@@ -9,6 +9,7 @@ This package runs deterministic rule-based agents that generate Groth16 proofs a
 - `src/zk/`: witness builders and `snarkjs` proof generation bindings.
 - `src/strategies/`: deterministic yield-farming strategy rules.
 - `src/agents/`: Patricon agent orchestration logic.
+- `src/settlement/`: settlement action construction and SettlementConnector submission.
 - `src/logging/`: structured JSON logging.
 
 ## Responsibilities
@@ -18,13 +19,21 @@ This package runs deterministic rule-based agents that generate Groth16 proofs a
 - Build policy and identity witnesses.
 - Generate Groth16 proofs from compiled Circom artifacts.
 - Submit `depositWithProof`, `withdrawWithProof`, or `rebalanceWithProof` transactions.
+- Execute settlement payments through `SettlementConnector.executeSettlementWithProof` using policy proofs.
 - Support dry-run mode for safe debugging.
+
+## Integration with Patricon
+
+- Loads circuit artifacts produced by `circuits/`.
+- Submits proof-gated calls to contracts deployed from `contracts/`.
+- Produces execution logs and on-chain events visualized in `dashboard/`.
 
 ## Scripts
 
 - `pnpm dev`: Start service in watch mode.
 - `pnpm start:agent`: Run the agent in normal mode with live submission.
 - `pnpm start:simulated`: Run in deterministic simulation mode with dry run enabled.
+- `pnpm demo:settlement`: Run demo flow (deposit -> simulated yield -> policy-proven settlement).
 - `pnpm build`: Compile TypeScript output to `dist/`.
 - `pnpm start`: Run compiled service.
 - `pnpm test`: Execute unit tests.
@@ -67,3 +76,14 @@ Set either:
 - `AGENT_MODE=simulated`
 
 In dry run mode, the service executes strategy and proof generation but skips on-chain transaction submission.
+
+## Settlement flow
+
+The settlement extension uses policy proofs to gate payment events:
+
+1. A settlement action is derived from realized yield and configured settlement share.
+2. The service builds a policy witness and generates a Groth16 proof.
+3. The proof is locally verified for observability.
+4. `SettlementConnector.executeSettlementWithProof` is called with payment parameters and proof payload.
+
+This keeps DeFi execution and PayFi-style settlement on a shared policy framework.

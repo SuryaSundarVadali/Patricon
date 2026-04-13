@@ -20,7 +20,7 @@ This package contains Solidity contracts for Patricon policy enforcement and pro
 	- `IVerifierIdentity.sol`, `IVerifierPolicy.sol`: fixed public-signal interfaces.
 - `contracts/adapters/`
 	- `PolicyEnforcedDeFiAdapter.sol`: `depositWithProof`, `withdrawWithProof`, `rebalanceWithProof`.
-	- `SettlementConnector.sol`: proof-gated settlement event connector.
+	- `SettlementConnector.sol`: proof-gated PayFi-style settlement connector with `executeSettlementWithProof`.
 	- `MockYieldPool.sol`: simple pool for test and fallback testnet deployment.
 
 ## Scripts
@@ -28,6 +28,12 @@ This package contains Solidity contracts for Patricon policy enforcement and pro
 - `pnpm compile`: Compile all contracts.
 - `pnpm test`: Run contract tests.
 - `pnpm deploy:testnet`: Deploy verifier + registry + adapter contracts to HashKey Chain testnet.
+
+## Integration with Patricon
+
+- Consumes verifier contracts generated from `circuits/`.
+- Exposes proof-gated entrypoints used by `agent-service/` for DeFi and settlement execution.
+- Emits events consumed by `dashboard/` for observability.
 
 ## Public input mapping
 
@@ -70,3 +76,15 @@ The file includes deployed addresses for:
 - `targetPool`
 - `policyEnforcedDeFiAdapter`
 - `settlementConnector`
+
+## Settlement extension
+
+`SettlementConnector` extends Patricon policy enforcement into payment instructions:
+
+- `executeSettlementWithProof(...)` accepts payer/payee/asset/amount and policy proof data.
+- It validates proof/public signals against `PolicyRegistry` and `VerifierPolicy`.
+- On success, it emits:
+	- `PaymentRequested`
+	- `PaymentExecuted`
+
+This keeps settlement execution aligned with the same policy constraints used for DeFi actions.

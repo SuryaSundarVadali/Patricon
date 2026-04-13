@@ -8,6 +8,8 @@ import {IVerifierPolicy} from "../verifier/IVerifierPolicy.sol";
 /// @notice Minimal settlement gateway that requires a valid policy proof prior to settlement intent emission.
 contract SettlementConnector {
     error InvalidAddress();
+    error InvalidPaymentParty();
+    error InvalidAmount();
     error UnknownOrInactivePolicy();
     error PolicyHashMismatch();
     error PolicySignalMismatch();
@@ -22,13 +24,25 @@ contract SettlementConnector {
     PolicyRegistry public immutable policyRegistry;
     IVerifierPolicy public immutable policyVerifier;
 
-    event SettlementRequested(
-        bytes32 indexed settlementRef,
+    event PaymentRequested(
+        bytes32 indexed paymentRef,
         address indexed agent,
-        address indexed recipient,
+        address indexed payer,
+        address payee,
+        address asset,
         uint256 amount,
         uint256 executionTimestamp,
         uint256 tradeNonce,
+        bytes32 policyHash
+    );
+
+    event PaymentExecuted(
+        bytes32 indexed paymentRef,
+        address indexed agent,
+        address indexed payer,
+        address payee,
+        address asset,
+        uint256 amount,
         bytes32 policyHash
     );
 
@@ -38,10 +52,12 @@ contract SettlementConnector {
         policyVerifier = IVerifierPolicy(policyVerifier_);
     }
 
-    function requestSettlementWithProof(
-        bytes32 settlementRef,
+    function executeSettlementWithProof(
+        bytes32 paymentRef,
         address agent,
-        address recipient,
+        address payer,
+        address payee,
+        address asset,
         uint256 amount,
         uint256 tokenId,
         uint256 executionTimestamp,
@@ -49,6 +65,9 @@ contract SettlementConnector {
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
     ) external {
+        if (payer == address(0) || payee == address(0) || asset == address(0)) revert InvalidPaymentParty();
+        if (amount == 0) revert InvalidAmount();
+
         (bytes32 policyHash,,, bool active) = policyRegistry.getPolicyForAgent(agent);
         if (!active || policyHash == bytes32(0)) revert UnknownOrInactivePolicy();
         if (policySignals[2] != uint256(policyHash)) revert PolicyHashMismatch();
@@ -56,10 +75,12 @@ contract SettlementConnector {
         {
             revert PolicySignalMismatch();
         }
+        if (amount > policySignals[3]) revert PolicySignalMismatch();
 
         bool valid = policyVerifier.verifyProof(policyProof.pA, policyProof.pB, policyProof.pC, policySignals);
         if (!valid) revert PolicyProofInvalid();
 
-        emit SettlementRequested(settlementRef, agent, recipient, amount, executionTimestamp, tradeNonce, policyHash);
+        emit PaymentRequested(paymentRef, agent, payer, payee, asset, amount, executionTimestamp, tradeNonce, policyHash);
+        emit PaymentExecuted(paymentRef, agent, payer, payee, asset, amount, policyHash);
     }
 }

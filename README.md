@@ -1,26 +1,82 @@
 # Patricon
 
-Patricon is a production-grade zero-knowledge identity and policy enforcement layer for autonomous on-chain agents.
-It enables deterministic agent execution only when the agent presents a valid proof that action constraints were satisfied and identity linkage requirements were met.
+Patricon is a zero-knowledge identity and policy layer for autonomous agents on HashKey Chain.
+It enforces that agent actions are executed only when policy and identity proofs are valid.
 
 ## Architecture
 
-- `circuits/`: Circom 2.x circuits, trusted setup scripts, and Groth16 proof tooling on BN254.
-- `contracts/`: Solidity policy registry, verifier integration, and adapter contracts for DeFi and settlement flows.
-- `agent-service/`: TypeScript rule-based agent service that generates proofs and submits transactions to HashKey Chain.
-- `dashboard/`: React + TypeScript dashboard for observing agents, policies, proofs, and transaction status.
-- `config/`: Shared configuration templates for network and service settings.
+```text
+                  +-------------------------------+
+                  |            circuits/          |
+                  | Identity + policy Circom zk   |
+                  +---------------+---------------+
+                                  |
+                                  v
+                  +-------------------------------+
+                  |            contracts/         |
+                  | Verifiers, registries,        |
+                  | DeFi adapter, settlement gate |
+                  +---------------+---------------+
+                                  ^
+                                  |
+                  +---------------+---------------+
+                  |         agent-service/        |
+                  | Rule-based decisions, witness |
+                  | build, proof gen, tx submit   |
+                  +---------------+---------------+
+                                  |
+                                  v
+                  +-------------------------------+
+                  |           dashboard/          |
+                  | Read-only observability for   |
+                  | agents, policies, proofs      |
+                  +-------------------------------+
+```
+
+Project packages:
+
+- `circuits/`: Circom 2.x circuits, setup flow, proving and verifier export.
+- `contracts/`: Solidity verification and enforcement layer.
+- `agent-service/`: TypeScript automation and proof submission runtime.
+- `dashboard/`: React dashboard for state and event visibility.
+- `config/`: shared network and deployment configuration files.
 
 ## Quick Start
 
-1. Install dependencies:
+1. Install dependencies (workspace root):
    - `pnpm install`
-2. Run tests:
+
+2. Build circuits and run trusted setup:
+   - `cd circuits`
+   - `pnpm build`
+   - `pnpm setup`
+   - `pnpm export:verifier`
+
+3. Compile and test contracts:
+   - `cd contracts`
+   - `pnpm compile`
    - `pnpm test`
-3. Start local development services:
-   - `pnpm dev:agent`
-   - `pnpm dev:dashboard`
+
+4. Deploy contracts to test network (HashKey Chain):
+   - `cd contracts`
+   - set `PRIVATE_KEY` and `HASHKEY_TESTNET_RPC_URL`
+   - `pnpm deploy:testnet`
+   - confirm `config/deployments/hashkeyTestnet.json` is updated
+
+5. Run agent service:
+   - Dry run / simulation:
+     - `cd agent-service`
+     - `pnpm start:simulated`
+   - Live mode:
+     - `cd agent-service`
+     - configure contract addresses and key in `.env`
+     - `pnpm start:agent`
+
+6. Run dashboard:
+   - `cd dashboard`
+   - `pnpm dev`
 
 ## Security and Compliance
 
-Patricon is designed for policy-constrained automation. Proof generation and verification workflows are intended to be auditable, deterministic, and privacy-preserving.
+Patricon is designed for identity-bound, policy-constrained automation.
+Proof generation and verification workflows are deterministic, auditable, and privacy-preserving.

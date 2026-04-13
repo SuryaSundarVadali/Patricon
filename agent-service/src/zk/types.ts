@@ -36,7 +36,11 @@ export type FullProofBundle = {
   elapsedMs: number;
 };
 
+export type VerifiedProofBundle = FullProofBundle & {
+  verified: boolean;
+};
+
 export type ActionProofBundle = {
-  identity: FullProofBundle;
-  policy: FullProofBundle;
+  identity: VerifiedProofBundle;
+  policy: VerifiedProofBundle;
 };

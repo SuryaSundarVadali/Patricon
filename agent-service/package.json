@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start:agent": "tsx src/index.ts",
     "start:simulated": "AGENT_MODE=simulated PATRICON_DRY_RUN=true tsx src/index.ts",
+    "demo:settlement": "AGENT_MODE=simulated PATRICON_DRY_RUN=true tsx src/scenarios/settlement-demo.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
     "lint": "tsc --noEmit"
