@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Build outputs
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+
+# Circom and snarkjs artifacts
+circuits/compiled/
+circuits/artifacts/
+circuits/build/
+circuits/**/*.r1cs
+circuits/**/*.wasm
+circuits/**/*.sym
+circuits/**/*.wtns
+circuits/**/*.zkey
+circuits/**/*.ptau
+circuits/**/*.json
+!circuits/**/*.input.json
+
+# Solidity tool artifacts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+contracts/out/
+
+# Dashboard build
+dashboard/dist/
+
+# OS and editor
+.DS_Store
+.vscode/
+.idea/

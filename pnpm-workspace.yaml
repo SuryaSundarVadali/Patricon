@@ -1,0 +1,5 @@
+packages:
+  - circuits
+  - contracts
+  - agent-service
+  - dashboard

@@ -1,0 +1,7 @@
+{
+  "hashkeyTestnet": {
+    "chainId": 133,
+    "rpcUrl": "https://rpc.testnet.hashkey.cloud",
+    "explorer": "https://hashkey.blockscout.com"
+  }
+}

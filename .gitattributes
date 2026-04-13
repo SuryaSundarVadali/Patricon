@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.sol text eol=lf
+*.circom text eol=lf
+
+# Binary artifacts
+*.ptau binary
+*.zkey binary
+*.wasm binary
+*.wtns binary
+*.proof binary
+
+# Mark generated verifier contracts as generated for language stats
+contracts/contracts/verifier/*.sol linguist-generated=true

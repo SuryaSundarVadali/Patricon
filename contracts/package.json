@@ -1,0 +1,17 @@
+{
+  "name": "@patricon/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Patricon Solidity contracts and deployment scripts.",
+  "scripts": {
+    "build": "forge build",
+    "compile": "forge build",
+    "test": "forge test -vv",
+    "deploy:testnet": "bash ./scripts/deploy-testnet.sh hashkeyTestnet",
+    "lint": "forge fmt --check && forge build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

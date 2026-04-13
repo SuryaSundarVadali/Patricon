@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  agent-service:
+    build:
+      context: .
+      target: agent-runtime
+    env_file:
+      - .env
+    environment:
+      - HASHKEY_TESTNET_RPC_URL=${HASHKEY_TESTNET_RPC_URL}
+      - HASHKEY_TESTNET_CHAIN_ID=${HASHKEY_TESTNET_CHAIN_ID}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - POLICY_REGISTRY_ADDRESS=${POLICY_REGISTRY_ADDRESS}
+      - PROOF_VERIFIER_ADDRESS=${PROOF_VERIFIER_ADDRESS}
+      - DEFI_ADAPTER_ADDRESS=${DEFI_ADAPTER_ADDRESS}
+      - SETTLEMENT_ADAPTER_ADDRESS=${SETTLEMENT_ADAPTER_ADDRESS}
+
+  dashboard:
+    build:
+      context: .
+      target: dashboard-runtime
+    ports:
+      - "4173:80"
+    environment:
+      - HASHKEY_TESTNET_CHAIN_ID=${HASHKEY_TESTNET_CHAIN_ID}
+      - POLICY_REGISTRY_ADDRESS=${POLICY_REGISTRY_ADDRESS}
+      - PROOF_VERIFIER_ADDRESS=${PROOF_VERIFIER_ADDRESS}

@@ -1,0 +1,25 @@
+{
+  "name": "patricon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Patricon monorepo for zero-knowledge identity, policy enforcement, and agent execution on EVM networks.",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "workspaces": [
+    "circuits",
+    "contracts",
+    "agent-service",
+    "dashboard"
+  ],
+  "scripts": {
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build",
+    "dev:agent": "pnpm --filter agent-service dev",
+    "dev:dashboard": "pnpm --filter dashboard dev",
+    "compile:contracts": "pnpm --filter contracts compile",
+    "proof:build": "pnpm --filter circuits build"
+  }
+}
