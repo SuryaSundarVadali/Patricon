@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
+import { Icon } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
@@ -77,9 +78,11 @@ export function AgentsPage({ data }: Props) {
 
   const rows = agentRecords.map((agent) => [
     <button className="table-link" key={`${agent.agent}-open`} onClick={() => setSelectedAgent(agent.agent)}>
+      <Icon name="details" size={18} aria-hidden="true" />
       {shorten(agent.agent)}
     </button>,
     <span className={`account-badge ${agent.accountType === "Safe" ? "smart" : "eoa"}`} key={`${agent.agent}-account`}>
+      <Icon name="wallet" size={16} aria-hidden="true" />
       {agent.accountType === "Safe" ? "Safe / ERC-4337" : "EOA"}
     </span>,
     agent.role,
@@ -89,6 +92,11 @@ export function AgentsPage({ data }: Props) {
     formatTime(agent.lastOnChain),
     `${agent.actions24h} actions / ${agent.proofs24h} proofs`,
     <span className={`status-badge ${agent.status}`} key={`${agent.agent}-status`}>
+      <Icon
+        name={agent.status === "healthy" ? "success" : agent.status === "paused" ? "pause" : "warning"}
+        size={16}
+        aria-hidden="true"
+      />
       {agent.status}
     </span>
   ]);
@@ -183,7 +191,7 @@ export function AgentsPage({ data }: Props) {
         ]}
         rows={rows}
         emptyText="No agents yet. Register your first autonomous operator agent."
-        emptyAction={<a className="btn btn-primary" href="#actions">Register agent</a>}
+        emptyAction={<a className="btn btn-primary" href="#actions"><Icon name="plusSquare" size={18} aria-hidden="true" /> Register agent</a>}
       />
     </>
   );

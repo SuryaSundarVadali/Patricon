@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DataTable } from "../components/DataTable";
+import { Icon } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
@@ -88,7 +89,12 @@ export function ProofsPage({ data }: Props) {
     </span>,
     `${shorten(item.policyHash)} (v${item.policyVersion || "-"})`,
     `${item.proofType} / circuit v${item.circuitVersion}`,
-    <span className="proof-pill" key={`${item.txHash}-proof`}>
+    <span className={`proof-pill ${item.decision}`} key={`${item.txHash}-proof`}>
+      <Icon
+        name={item.decision === "accepted" ? "success" : item.decision === "failed" ? "error" : "warning"}
+        size={16}
+        aria-hidden="true"
+      />
       {item.decision}
     </span>,
     shorten(item.txHash),
@@ -97,7 +103,8 @@ export function ProofsPage({ data }: Props) {
     item.timestamp ? new Date(item.timestamp).toLocaleString() : "-",
     <button
       key={`${item.txHash}-details`}
-      className="table-link"
+      className="table-link icon-only"
+      aria-label="Open raw proof diagnostics"
       onClick={() =>
         setSelected({
           txHash: item.txHash,
@@ -113,7 +120,7 @@ export function ProofsPage({ data }: Props) {
         })
       }
     >
-      View raw data
+      <Icon name="details" size={18} aria-hidden="true" />
     </button>
   ]);
 
@@ -221,7 +228,7 @@ export function ProofsPage({ data }: Props) {
         ]}
         rows={rows}
         emptyText="No machine actions found for this filter set."
-        emptyAction={<a className="btn btn-primary" href="#actions">Execute settlement</a>}
+        emptyAction={<a className="btn btn-primary" href="#actions"><Icon name="play" size={18} aria-hidden="true" /> Execute settlement</a>}
       />
     </>
   );

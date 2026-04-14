@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { WalletPanel } from "./components/WalletPanel";
+import { Icon } from "./icons/Icon";
 import { OverviewPage } from "./pages/OverviewPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { PoliciesPage } from "./pages/PoliciesPage";
@@ -12,7 +13,7 @@ import { SettlementPage } from "./pages/SettlementPage";
 export default function App() {
   const location = useLocation();
   const networkName = "hashkeyTestnet";
-  const { data, loading, error } = useDashboardData(networkName);
+  const { data, loading, error, retry } = useDashboardData(networkName);
   const [menuOpen, setMenuOpen] = useState(false);
   const isOverviewRoute = location.pathname === "/";
   const routeTitles: Record<string, string> = {
@@ -41,12 +42,12 @@ export default function App() {
           </button>
 
           <nav className={`top-nav-links ${menuOpen ? "is-open" : ""}`} aria-label="Primary">
-            <NavLink onClick={() => setMenuOpen(false)} to="/">Overview</NavLink>
-            <NavLink onClick={() => setMenuOpen(false)} to="/agents">Agents</NavLink>
-            <NavLink onClick={() => setMenuOpen(false)} to="/policies">Policies</NavLink>
-            <NavLink onClick={() => setMenuOpen(false)} to="/activity">Activity</NavLink>
-            <NavLink onClick={() => setMenuOpen(false)} to="/settlement">Settlement</NavLink>
-            <NavLink onClick={() => setMenuOpen(false)} to="/settings">Settings</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/"><Icon name="overview" size={24} aria-hidden="true" />Overview</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/agents"><Icon name="agents" size={24} aria-hidden="true" />Agents</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/policies"><Icon name="policies" size={24} aria-hidden="true" />Policies</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/activity"><Icon name="activity" size={24} aria-hidden="true" />Activity</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/settlement"><Icon name="settlement" size={24} aria-hidden="true" />Settlement</NavLink>
+            <NavLink onClick={() => setMenuOpen(false)} to="/settings"><Icon name="settings" size={24} aria-hidden="true" />Settings</NavLink>
           </nav>
 
           <div className="nav-actions">
@@ -64,11 +65,30 @@ export default function App() {
           </div>
         )}
 
-        {loading && <section className="panel"><p>Loading dashboard data...</p></section>}
+        {loading && (
+          <section className="panel skeleton-panel" aria-label="Loading dashboard">
+            <div className="skeleton-title" />
+            <div className="skeleton-grid">
+              <div className="skeleton-card" />
+              <div className="skeleton-card" />
+              <div className="skeleton-card" />
+            </div>
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+          </section>
+        )}
         {error && !loading && (
           <section className="panel error">
             <h2>Data Source Error</h2>
-            <p>{error}</p>
+            <p className="error-row"><Icon name="error" aria-hidden="true" /> {error}</p>
+            <div className="error-actions">
+              <button className="btn btn-primary" onClick={retry}>
+                <Icon name="refresh" aria-hidden="true" /> Retry
+              </button>
+              <Link className="btn btn-secondary" to="/settings">
+                <Icon name="details" aria-hidden="true" /> View logs
+              </Link>
+            </div>
           </section>
         )}
         {data && !loading && !error && (

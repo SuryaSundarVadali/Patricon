@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/DataTable";
+import { Icon } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
@@ -44,6 +45,7 @@ export function PoliciesPage({ data }: Props) {
 
   const rows = policyRows.map((policy) => [
     <button className="table-link" key={`${policy.policyHash}-view`} onClick={() => setSelectedPolicy(policy.policyHash)}>
+      <Icon name="details" size={18} aria-hidden="true" />
       {shorten(policy.policyHash)}
     </button>,
     policy.policyName,
@@ -54,6 +56,7 @@ export function PoliciesPage({ data }: Props) {
     `${policy.maxTradeSize} | ${policy.dailyCap}`,
     `${policy.allowedPools} | ${policy.timeWindow}`,
     <span className={`status-badge ${policy.statusFlag === "active" ? "healthy" : "paused"}`} key={`${policy.policyHash}-status`}>
+      <Icon name={policy.statusFlag === "active" ? "success" : "pause"} size={16} aria-hidden="true" />
       {policy.statusFlag}
     </span>
   ]);
@@ -77,34 +80,44 @@ export function PoliciesPage({ data }: Props) {
               <p><strong>Circuit & version:</strong> policy v{selected.policyVersion} / circuit v{selected.circuitVersion}</p>
             </div>
 
-            <h4>Risk Limits</h4>
-            <div className="detail-grid">
-              <p><strong>Max trade size:</strong> {selected.maxTradeSize}</p>
-              <p><strong>Daily volume cap:</strong> {selected.dailyCap}</p>
-            </div>
+            <details className="collapsible" open>
+              <summary>Risk Limits</summary>
+              <div className="collapsible-content detail-grid">
+                <p><strong>Max trade size:</strong> {selected.maxTradeSize}</p>
+                <p><strong>Daily volume cap:</strong> {selected.dailyCap}</p>
+              </div>
+            </details>
 
-            <h4>Whitelisted Assets & Pools</h4>
-            <div className="detail-grid">
-              <p>{selected.allowedPools}</p>
-            </div>
+            <details className="collapsible" open>
+              <summary>Whitelisted Assets & Pools</summary>
+              <div className="collapsible-content detail-grid">
+                <p>{selected.allowedPools}</p>
+              </div>
+            </details>
 
-            <h4>Time & Frequency Controls</h4>
-            <div className="detail-grid">
-              <p><strong>Execution window:</strong> {selected.timeWindow}</p>
-            </div>
+            <details className="collapsible" open>
+              <summary>Time & Frequency Controls</summary>
+              <div className="collapsible-content detail-grid">
+                <p><strong>Execution window:</strong> {selected.timeWindow}</p>
+              </div>
+            </details>
 
-            <h4>Circuit & Proof Metadata</h4>
-            <div className="detail-grid">
-              <p><strong>Bound agents:</strong> {selected.boundAgents.join(", ")}</p>
-              <p><strong>Policy model:</strong> {selected.mode}</p>
-            </div>
+            <details className="collapsible" open>
+              <summary>Circuit & Proof Metadata</summary>
+              <div className="collapsible-content detail-grid">
+                <p><strong>Bound agents:</strong> {selected.boundAgents.join(", ")}</p>
+                <p><strong>Policy model:</strong> {selected.mode}</p>
+              </div>
+            </details>
 
-            <h4>Simulation Summary (Last 24h)</h4>
-            <div className="detail-grid">
-              <p><strong>Trades attempted:</strong> {selected.attempted24h}</p>
-              <p><strong>Rejected by policy:</strong> {selected.rejected24h}</p>
-              <p><strong>Executed:</strong> {selected.executed24h}</p>
-            </div>
+            <details className="collapsible" open>
+              <summary>Simulation Summary (Last 24h)</summary>
+              <div className="collapsible-content detail-grid">
+                <p><strong>Trades attempted:</strong> {selected.attempted24h}</p>
+                <p><strong>Rejected by policy:</strong> {selected.rejected24h}</p>
+                <p><strong>Executed:</strong> {selected.executed24h}</p>
+              </div>
+            </details>
 
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setSelectedPolicy(null)}>Close</button>
@@ -129,7 +142,7 @@ export function PoliciesPage({ data }: Props) {
         ]}
         rows={rows}
         emptyText="No policy entries found. Add or update a policy to enforce operational limits."
-        emptyAction={<a className="btn btn-secondary" href="#actions">Update policy</a>}
+        emptyAction={<a className="btn btn-secondary" href="#actions"><Icon name="refresh" size={18} aria-hidden="true" /> Update policy</a>}
       />
     </>
   );

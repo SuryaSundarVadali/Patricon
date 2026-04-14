@@ -1,4 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Icon } from "../icons/Icon";
+import type { IconName } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
@@ -14,6 +17,30 @@ function shortenHash(hash: string): string {
 
 function formatCompact(value: number): string {
   return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function AnimatedMetricValue({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const duration = 380;
+    const start = performance.now();
+    let frame = 0;
+
+    const tick = (time: number) => {
+      const progress = Math.min(1, (time - start) / duration);
+      const eased = 1 - (1 - progress) * (1 - progress);
+      setDisplay(Math.round(value * eased));
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <>{formatCompact(display)}</>;
 }
 
 function sparkline(values: number[]): string {
@@ -99,62 +126,91 @@ export function OverviewPage({ data }: Props) {
     }).length;
   });
 
-  const metricCards = [
+  const metricCards = useMemo<Array<{
+    icon: IconName;
+    label: string;
+    numericValue?: number;
+    value?: string;
+    caption: string;
+    trend: string;
+  }>>(() => [
     {
+      icon: "agents",
       label: "Total agents registered",
-      value: formatCompact(totalAgents),
+      numericValue: totalAgents,
       caption: "Agent accounts bound to on-chain identity and policy controls.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "agents",
       label: "Active agents (24h)",
-      value: formatCompact(activeAgents24h),
+      numericValue: activeAgents24h,
       caption: "Agents that executed at least one on-chain action in the last day.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "policies",
       label: "Active policies",
-      value: formatCompact(activePolicies),
+      numericValue: activePolicies,
       caption: "Policies currently enforceable for strategy execution.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "refresh",
       label: "Policies updated (7d)",
-      value: formatCompact(updatedPolicies7d),
+      numericValue: updatedPolicies7d,
       caption: "Policies observed with recent agent activity in the last week.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "success",
       label: "Total proofs verified",
-      value: formatCompact(totalProofs),
+      numericValue: totalProofs,
       caption: "Historical proof-backed actions accepted by the protocol.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "activity",
       label: "Proofs per 24h",
-      value: formatCompact(proofs24h),
+      numericValue: proofs24h,
       caption: "Throughput of policy-gated machine actions in the last day.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "warning",
       label: "Failed proofs (24h)",
-      value: formatCompact(failedProofs24h),
+      numericValue: failedProofs24h,
       caption: "Actions that failed or reverted during proof-gated execution.",
       trend: sparkline(sixDaySeries)
     },
     {
+      icon: "settlement",
       label: "Networks / Adapters / Connectors",
       value: `${networksConfigured} / ${adaptersConfigured} / ${connectorsConfigured}`,
       caption: "Configured EVM networks, DeFi adapters, and settlement connectors.",
       trend: "infra"
     },
     {
+      icon: "shieldAgent",
       label: "Value guarded (est)",
-      value: formatCompact(valueGuarded),
+      numericValue: valueGuarded,
       caption: "Approximate value routed through Patricon policy-gated actions.",
       trend: sparkline(sixDaySeries)
     }
-  ];
+  ], [
+    activeAgents24h,
+    activePolicies,
+    adaptersConfigured,
+    connectorsConfigured,
+    failedProofs24h,
+    networksConfigured,
+    proofs24h,
+    sixDaySeries,
+    totalAgents,
+    totalProofs,
+    updatedPolicies7d,
+    valueGuarded
+  ]);
 
   return (
     <>
@@ -200,8 +256,17 @@ export function OverviewPage({ data }: Props) {
       <section className="hero-metric-grid">
         {metricCards.map((metric) => (
           <article className="panel hero-metric-card" key={metric.label}>
+            <div className="metric-card-header">
+              <Icon name={metric.icon} size={32} aria-hidden="true" />
+            </div>
             <p className="stat-label">{metric.label}</p>
-            <p className="stat-value">{metric.value}</p>
+            <p className="stat-value">
+              {typeof metric.numericValue === "number" ? (
+                <AnimatedMetricValue value={metric.numericValue} />
+              ) : (
+                metric.value
+              )}
+            </p>
             <p className="sparkline">{metric.trend}</p>
             <p className="muted metric-caption">{metric.caption}</p>
           </article>

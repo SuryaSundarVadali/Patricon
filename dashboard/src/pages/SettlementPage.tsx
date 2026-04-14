@@ -1,5 +1,6 @@
 import { DataTable } from "../components/DataTable";
 import { WalletActionsPanel } from "../components/WalletActionsPanel";
+import { Icon } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
@@ -23,7 +24,8 @@ export function SettlementPage({ data }: Props) {
       "strategy-receiver",
       item.poolOrAsset,
       normalizedAmount,
-      <span className="proof-pill" key={`${item.txHash}-proof`}>
+      <span className={`proof-pill ${item.txStatus === "confirmed" ? "accepted" : "failed"}`} key={`${item.txHash}-proof`}>
+        <Icon name={item.txStatus === "confirmed" ? "success" : "error"} size={16} aria-hidden="true" />
         {item.proofStatus} · policy v{policy?.policyVersion ?? "-"}
       </span>,
       item.txStatus,

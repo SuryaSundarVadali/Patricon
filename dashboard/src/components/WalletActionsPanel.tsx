@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { id } from "ethers";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { Icon } from "../icons/Icon";
 import type { DashboardData } from "../lib/dashboard-data";
 
 const policyRegistryAbi = [
@@ -78,6 +79,7 @@ type ToastType = "success" | "error";
 type ToastState = {
   type: ToastType;
   message: string;
+  txHash?: string;
 } | null;
 
 const zeroAddress = "0x0000000000000000000000000000000000000000";
@@ -94,8 +96,8 @@ export function WalletActionsPanel({ data }: Props) {
   const [confirmAction, setConfirmAction] = useState<PendingAction>(null);
   const [toast, setToast] = useState<ToastState>(null);
 
-  function showToast(type: ToastType, message: string) {
-    setToast({ type, message });
+  function showToast(type: ToastType, message: string, txHash?: string) {
+    setToast({ type, message, txHash });
     window.setTimeout(() => setToast(null), 4000);
   }
 
@@ -106,9 +108,9 @@ export function WalletActionsPanel({ data }: Props) {
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     setStatus(`Confirmed tx ${hash} with status ${receipt.status}`);
     if (receipt.status === "success") {
-      showToast("success", `Transaction confirmed: ${hash.slice(0, 10)}...`);
+      showToast("success", `Transaction confirmed: ${hash.slice(0, 10)}...`, hash);
     } else {
-      showToast("error", `Transaction reverted: ${hash.slice(0, 10)}...`);
+      showToast("error", `Transaction reverted: ${hash.slice(0, 10)}...`, hash);
     }
   }
 
@@ -258,7 +260,21 @@ export function WalletActionsPanel({ data }: Props) {
       {toast && (
         <aside className={`toast ${toast.type}`} role="status" aria-live="polite">
           <span className="toast-strip" aria-hidden="true" />
-          <p>{toast.message}</p>
+          <div className="toast-content">
+            <p>
+              <Icon name={toast.type === "success" ? "success" : "error"} size={18} aria-hidden="true" /> {toast.message}
+            </p>
+            {toast.txHash && data.network.explorer && (
+              <a
+                className="table-link"
+                href={`${data.network.explorer}/tx/${toast.txHash}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="external" size={16} aria-hidden="true" /> View tx
+              </a>
+            )}
+          </div>
         </aside>
       )}
 
@@ -296,6 +312,7 @@ export function WalletActionsPanel({ data }: Props) {
               disabled={!isConnected || isPending}
               onClick={() => setConfirmAction("register-agent")}
             >
+              <Icon name="play" size={18} aria-hidden="true" />
               Register agent
             </button>
           </article>
@@ -307,6 +324,7 @@ export function WalletActionsPanel({ data }: Props) {
               disabled={!isConnected || isPending}
               onClick={() => setConfirmAction("update-policy")}
             >
+              <Icon name="refresh" size={18} aria-hidden="true" />
               Update policy
             </button>
           </article>
@@ -318,12 +336,15 @@ export function WalletActionsPanel({ data }: Props) {
               disabled={!isConnected || isPending}
               onClick={() => setConfirmAction("execute-settlement")}
             >
+              <Icon name="settlement" size={18} aria-hidden="true" />
               Execute settlement
             </button>
           </article>
         </div>
         <div className="action-status">
-          <span className={`loading-dot ${isPending ? "active" : ""}`} aria-hidden="true" />
+          <span className={`loading-dot ${isPending ? "active" : ""}`} aria-hidden="true">
+            {isPending ? <Icon name="spinner" size={16} className="spin" aria-hidden="true" /> : <Icon name="success" size={16} aria-hidden="true" />}
+          </span>
           <p className="muted">{isPending ? "Awaiting wallet confirmation..." : status}</p>
         </div>
       </section>

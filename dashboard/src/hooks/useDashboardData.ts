@@ -5,6 +5,7 @@ export function useDashboardData(networkName: string) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +34,12 @@ export function useDashboardData(networkName: string) {
     return () => {
       cancelled = true;
     };
-  }, [networkName]);
+  }, [networkName, reloadKey]);
 
-  return { data, loading, error };
+  return {
+    data,
+    loading,
+    error,
+    retry: () => setReloadKey((value) => value + 1)
+  };
 }
