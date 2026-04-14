@@ -5,9 +5,10 @@ import type { DashboardData } from "../lib/dashboard-data";
 
 type Props = {
   data: DashboardData;
+  onRefresh?: () => void;
 };
 
-export function SettlementPage({ data }: Props) {
+export function SettlementPage({ data, onRefresh }: Props) {
   const shorten = (value: string) => (value.length > 14 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value);
   const policyByAgent = new Map(data.policies.map((policy) => [policy.agent.toLowerCase(), policy]));
 
@@ -61,7 +62,7 @@ export function SettlementPage({ data }: Props) {
         emptyText="No settlement intents found yet."
       />
 
-      <WalletActionsPanel data={data} />
+      <WalletActionsPanel data={data} onTransactionSettled={onRefresh} />
     </>
   );
 }

@@ -191,7 +191,7 @@ export function AgentsPage({ data }: Props) {
         ]}
         rows={rows}
         emptyText="No agents yet. Register your first autonomous operator agent."
-        emptyAction={<a className="btn btn-primary" href="#actions"><Icon name="plusSquare" size={18} aria-hidden="true" /> Register agent</a>}
+        emptyAction={<a className="btn btn-primary" href="/settlement#actions"><Icon name="plusSquare" size={18} aria-hidden="true" /> Register agent</a>}
       />
     </>
   );

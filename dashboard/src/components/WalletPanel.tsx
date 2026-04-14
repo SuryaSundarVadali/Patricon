@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useConnect, useDisconnect, usePublicClient } from "wagmi";
+import { useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useSwitchChain } from "wagmi";
+import { resolveTargetChainId } from "../web3/config";
+import { Icon } from "../icons/Icon";
 
 function shorten(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -7,6 +9,7 @@ function shorten(address: string): string {
 
 type WalletPanelProps = {
   variant?: "full" | "compact";
+  networkName?: string;
 };
 
 function accountLabel(isConnected: boolean, address?: string, accountType?: string) {
@@ -18,10 +21,40 @@ function accountLabel(isConnected: boolean, address?: string, accountType?: stri
   return `Connected: ${shorten(address)} (${mode})`;
 }
 
-export function WalletPanel({ variant = "full" }: WalletPanelProps) {
+const connectorLabels: Record<string, string> = {
+  metaMask: "MetaMask",
+  injected: "Browser Wallet",
+  walletConnect: "WalletConnect",
+  safe: "Safe"
+};
+
+function parseWalletErrorMessage(err: unknown): string | null {
+  if (!(err instanceof Error)) {
+    return null;
+  }
+  const msg = err.message;
+  if (msg.toLowerCase().includes("user rejected")) {
+    return "Wallet request was rejected.";
+  }
+  if (msg.toLowerCase().includes("unsupported chain")) {
+    return "Selected wallet network is unsupported for this dashboard.";
+  }
+  return msg;
+}
+
+export function WalletPanel({ variant = "full", networkName = "sepolia" }: WalletPanelProps) {
   const { address, connector, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const chainId = useChainId();
+  const targetChainId = resolveTargetChainId(networkName);
+  const wrongNetwork = isConnected && chainId !== targetChainId;
+  const {
+    connect,
+    connectors,
+    isPending,
+    error: connectError
+  } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChain, isPending: isSwitching, error: switchError } = useSwitchChain();
   const publicClient = usePublicClient();
   const [accountType, setAccountType] = useState("Disconnected");
 
@@ -63,11 +96,13 @@ export function WalletPanel({ variant = "full" }: WalletPanelProps) {
     return (
       <div className="wallet-chip-wrap">
         <span className={`status-chip ${isConnected ? "connected" : "disconnected"}`}>
-          {accountLabel(isConnected, address, accountType)}
+          {wrongNetwork ? `Wrong network (chain ${chainId})` : accountLabel(isConnected, address, accountType)}
         </span>
       </div>
     );
   }
+
+  const walletError = parseWalletErrorMessage(connectError) ?? parseWalletErrorMessage(switchError);
 
   return (
     <section className="panel" id="wallet-access">
@@ -83,7 +118,7 @@ export function WalletPanel({ variant = "full" }: WalletPanelProps) {
           <div className="wallet-buttons">
             {availableConnectors.map((c) => (
               <button key={c.uid} disabled={isPending} onClick={() => connect({ connector: c })}>
-                Connect {c.name}
+                {isPending ? "Connecting..." : `Connect ${connectorLabels[c.id] ?? c.name}`}
               </button>
             ))}
           </div>
@@ -91,12 +126,22 @@ export function WalletPanel({ variant = "full" }: WalletPanelProps) {
       ) : (
         <div className="wallet-meta">
           <p>Connector: {connector?.name ?? "Unknown"}</p>
+          <p>Chain ID: {chainId}</p>
           <p>Account type: {accountType}</p>
+          {wrongNetwork && (
+            <div className="error-actions">
+              <p className="error-row"><Icon name="warning" aria-hidden="true" /> Wrong network. Switch to chain {targetChainId}.</p>
+              <button className="btn btn-primary" disabled={isSwitching} onClick={() => switchChain({ chainId: targetChainId })}>
+                {isSwitching ? "Switching..." : "Switch Network"}
+              </button>
+            </div>
+          )}
           <button className="btn btn-secondary" onClick={() => disconnect()}>
             Disconnect
           </button>
         </div>
       )}
+      {walletError && <p className="error-row"><Icon name="error" aria-hidden="true" /> {walletError}</p>}
       <p className="muted">
         Supported signers include MetaMask, injected wallets, WalletConnect wallets, and
         ERC-4337 compatible smart accounts such as Safe.

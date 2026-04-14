@@ -53,7 +53,7 @@ export default function App() {
 
           <div className="nav-actions">
             <span className="status-chip">{networkLabel}</span>
-            <WalletPanel variant="compact" />
+            <WalletPanel variant="compact" networkName={networkName} />
           </div>
         </div>
       </header>
@@ -105,13 +105,13 @@ export default function App() {
             </aside>
 
             <section>
-              <WalletPanel />
+              <WalletPanel networkName={networkName} />
             <Routes>
               <Route path="/" element={<OverviewPage data={data} />} />
               <Route path="/agents" element={<AgentsPage data={data} />} />
               <Route path="/policies" element={<PoliciesPage data={data} />} />
               <Route path="/activity" element={<ProofsPage data={data} />} />
-              <Route path="/settlement" element={<SettlementPage data={data} />} />
+              <Route path="/settlement" element={<SettlementPage data={data} onRefresh={retry} />} />
               <Route path="/settings" element={<SettingsPage data={data} />} />
             </Routes>
             </section>

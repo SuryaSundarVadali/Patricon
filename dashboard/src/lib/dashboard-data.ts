@@ -1,4 +1,9 @@
-import { JsonRpcProvider, Contract, type EventLog } from "ethers";
+import {
+  parseAbiItem,
+  type Address,
+  type PublicClient
+} from "viem";
+import { createReadonlyPublicClient } from "../web3/config";
 
 export type DeploymentInfo = {
   network: string;
@@ -57,32 +62,100 @@ export type DashboardData = {
   activity: ActivityRow[];
 };
 
-function isEventLog(event: unknown): event is EventLog {
-  return typeof event === "object" && event !== null && "args" in event;
-}
-
 const zeroAddress = "0x0000000000000000000000000000000000000000";
 
-const policyRegistryAbi = [
-  "event PolicyConfigured(address indexed agent, bytes32 indexed policyHash, uint64 policyVersion, uint64 circuitVersion, bool active)",
-  "function getPolicyForAgent(address agent) view returns (bytes32 policyHash, uint64 policyVersion, uint64 circuitVersion, bool active)"
-] as const;
-
-const agentRegistryAbi = [
-  "event AgentRegistered(address indexed agent, bytes32 indexed didHash, bytes32 agentType, bytes32 publicKeyHash, bytes32 identityCommitment, uint64 identityVersion, bool active)",
-  "function getAgentBinding(address agent) view returns (bytes32 didHash, bytes32 publicKeyHash, bytes32 identityCommitment, bool active)"
-] as const;
-
-const defiAdapterAbi = [
-  "event DepositExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce)",
-  "event WithdrawExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce)",
+const policyConfiguredEvent = parseAbiItem(
+  "event PolicyConfigured(address indexed agent, bytes32 indexed policyHash, uint64 policyVersion, uint64 circuitVersion, bool active)"
+);
+const agentRegisteredEvent = parseAbiItem(
+  "event AgentRegistered(address indexed agent, bytes32 indexed didHash, bytes32 agentType, bytes32 publicKeyHash, bytes32 identityCommitment, uint64 identityVersion, bool active)"
+);
+const depositExecutedEvent = parseAbiItem(
+  "event DepositExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce)"
+);
+const withdrawExecutedEvent = parseAbiItem(
+  "event WithdrawExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce)"
+);
+const rebalanceExecutedEvent = parseAbiItem(
   "event RebalanceExecuted(address indexed agent, uint256 amount, uint256 fromTokenId, uint256 toTokenId, uint256 tradeNonce)"
-] as const;
+);
 
 declare const __PATRICON_CONFIG_DIR__: string;
 
 function isZeroAddress(address: string): boolean {
   return address.toLowerCase() === zeroAddress;
+}
+
+const logLookbackBlocks = Number(import.meta.env.VITE_LOG_LOOKBACK_BLOCKS ?? 100);
+const logChunkSize = Math.max(1, Number(import.meta.env.VITE_LOG_CHUNK_SIZE ?? 10));
+const logMaxRetries = Math.max(0, Number(import.meta.env.VITE_LOG_MAX_RETRIES ?? 3));
+const logRetryBaseMs = Math.max(0, Number(import.meta.env.VITE_LOG_RETRY_BASE_MS ?? 250));
+const logRequestDelayMs = Math.max(0, Number(import.meta.env.VITE_LOG_REQUEST_DELAY_MS ?? 25));
+const logMaxChunks = Math.max(1, Number(import.meta.env.VITE_LOG_MAX_CHUNKS ?? 8));
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimitedError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  const msg = err.message.toLowerCase();
+  return msg.includes("429")
+    || msg.includes("rate")
+    || msg.includes("throughput")
+    || msg.includes("compute units");
+}
+
+async function getLogsWithRetry(
+  client: PublicClient,
+  address: Address,
+  event: any,
+  fromBlock: bigint,
+  toBlock: bigint
+) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await client.getLogs({ address, event, fromBlock, toBlock });
+    } catch (err) {
+      if (!isRateLimitedError(err) || attempt >= logMaxRetries) {
+        throw err;
+      }
+      const jitter = Math.floor(Math.random() * logRetryBaseMs);
+      const delayMs = logRetryBaseMs * (2 ** attempt) + jitter;
+      await sleep(delayMs);
+      attempt += 1;
+    }
+  }
+}
+
+async function getLogsChunked(client: PublicClient, address: Address, event: any) {
+  const latest = Number(await client.getBlockNumber());
+  const requestedFromBlock = Math.max(0, latest - logLookbackBlocks);
+  const boundedFromBlock = Math.max(requestedFromBlock, latest - logMaxChunks * logChunkSize + 1);
+
+  const logs: any[] = [];
+  for (let start = boundedFromBlock; start <= latest; start += logChunkSize) {
+    const end = Math.min(start + logChunkSize - 1, latest);
+    const chunk = await getLogsWithRetry(client, address, event, BigInt(start), BigInt(end));
+    logs.push(...chunk);
+    if (logRequestDelayMs > 0) {
+      await sleep(logRequestDelayMs);
+    }
+  }
+
+  return logs;
+}
+
+async function getLogsChunkedSafe(client: PublicClient, address: string, event: any) {
+  try {
+    return await getLogsChunked(client, address as Address, event);
+  } catch (err) {
+    console.warn("Dashboard log query failed; continuing with partial data", err);
+    return [];
+  }
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -148,96 +221,106 @@ export async function loadDashboardData(networkName: string): Promise<DashboardD
   const deployment = await loadDeployment(networkName);
   const network = await loadNetwork(networkName);
 
-  const provider = new JsonRpcProvider(network.rpcUrl, network.chainId);
+  const publicClient = createReadonlyPublicClient(network.chainId, network.rpcUrl);
 
   const policyRows: PolicyRow[] = [];
   const agentRows: AgentRow[] = [];
   const activityRows: ActivityRow[] = [];
 
   if (!isZeroAddress(deployment.policyRegistry)) {
-    const policyRegistry = new Contract(deployment.policyRegistry, policyRegistryAbi, provider);
-    const policyEvents = await policyRegistry.queryFilter(policyRegistry.filters.PolicyConfigured(), -3_000);
+    const policyEvents = await getLogsChunkedSafe(publicClient, deployment.policyRegistry, policyConfiguredEvent);
 
     for (const event of policyEvents) {
-      if (!isEventLog(event)) {
-        continue;
-      }
-      const [agent, policyHash, policyVersion, circuitVersion, active] = event.args;
+      const args = event.args as {
+        agent: Address;
+        policyHash: `0x${string}`;
+        policyVersion: bigint;
+        circuitVersion: bigint;
+        active: boolean;
+      };
       policyRows.push({
-        agent,
-        policyHash,
-        policyVersion: Number(policyVersion),
-        circuitVersion: Number(circuitVersion),
-        active
+        agent: args.agent,
+        policyHash: args.policyHash,
+        policyVersion: Number(args.policyVersion),
+        circuitVersion: Number(args.circuitVersion),
+        active: args.active
       });
     }
   }
 
   if (!isZeroAddress(deployment.agentRegistry)) {
-    const agentRegistry = new Contract(deployment.agentRegistry, agentRegistryAbi, provider);
-    const agentEvents = await agentRegistry.queryFilter(agentRegistry.filters.AgentRegistered(), -3_000);
+    const agentEvents = await getLogsChunkedSafe(publicClient, deployment.agentRegistry, agentRegisteredEvent);
 
     for (const event of agentEvents) {
-      if (!isEventLog(event)) {
-        continue;
-      }
-      const [agent, didHash, agentTypeHash, _publicKeyHash, _identityCommitment, _identityVersion, active] = event.args;
-      const linkedPolicy = policyRows.find((p) => p.agent.toLowerCase() === agent.toLowerCase());
+      const args = event.args as {
+        agent: Address;
+        didHash: `0x${string}`;
+        agentType: `0x${string}`;
+        active: boolean;
+      };
+      const linkedPolicy = policyRows.find((policy) => policy.agent.toLowerCase() === args.agent.toLowerCase());
+      const bytecode = await publicClient.getBytecode({ address: args.agent });
 
-      const bytecode = await provider.getCode(agent);
       agentRows.push({
-        agent,
-        didHash,
-        agentTypeHash,
-        accountType: bytecode !== "0x" ? "Safe" : "EOA",
+        agent: args.agent,
+        didHash: args.didHash,
+        agentTypeHash: args.agentType,
+        accountType: bytecode ? "Safe" : "EOA",
         policyHash: linkedPolicy?.policyHash ?? "-",
         lastAction: "-",
-        active
+        active: args.active
       });
     }
   }
 
   if (!isZeroAddress(deployment.policyEnforcedDeFiAdapter)) {
-    const adapter = new Contract(deployment.policyEnforcedDeFiAdapter, defiAdapterAbi, provider);
-    const [depositEvents, withdrawEvents, rebalanceEvents] = await Promise.all([
-      adapter.queryFilter(adapter.filters.DepositExecuted(), -3_000),
-      adapter.queryFilter(adapter.filters.WithdrawExecuted(), -3_000),
-      adapter.queryFilter(adapter.filters.RebalanceExecuted(), -3_000)
-    ]);
+    const receiptCache = new Map<string, Awaited<ReturnType<PublicClient["getTransactionReceipt"]>>>();
+    const blockCache = new Map<string, Awaited<ReturnType<PublicClient["getBlock"]>>>();
 
-    const mapEvent = async (event: EventLog, action: string): Promise<ActivityRow> => {
-      const receipt = await event.getTransactionReceipt();
-      const block = await provider.getBlock(event.blockNumber);
-      const [agent, amount, tokenId] = event.args;
+    const depositEvents = await getLogsChunkedSafe(publicClient, deployment.policyEnforcedDeFiAdapter, depositExecutedEvent);
+    const withdrawEvents = await getLogsChunkedSafe(publicClient, deployment.policyEnforcedDeFiAdapter, withdrawExecutedEvent);
+    const rebalanceEvents = await getLogsChunkedSafe(publicClient, deployment.policyEnforcedDeFiAdapter, rebalanceExecutedEvent);
+
+    const mapEvent = async (event: any, action: string): Promise<ActivityRow> => {
+      const args = event.args as { agent: Address; amount: bigint; tokenId: bigint };
+      const txHash = event.transactionHash as `0x${string}`;
+      const blockNumber = event.blockNumber as bigint;
+
+      if (!receiptCache.has(txHash)) {
+        receiptCache.set(txHash, await publicClient.getTransactionReceipt({ hash: txHash }));
+      }
+      if (!blockCache.has(blockNumber.toString())) {
+        blockCache.set(blockNumber.toString(), await publicClient.getBlock({ blockNumber }));
+      }
+
+      const receipt = receiptCache.get(txHash);
+      const block = blockCache.get(blockNumber.toString());
+
       return {
-        txHash: event.transactionHash,
+        txHash,
         actionType: action,
-        agent,
-        poolOrAsset: `Token #${Number(tokenId)}`,
-        amount: amount.toString(),
+        agent: args.agent,
+        poolOrAsset: `Token #${Number(args.tokenId)}`,
+        amount: args.amount.toString(),
         proofStatus: "Proof ✓",
-        txStatus: receipt?.status === 1 ? "confirmed" : "reverted",
+        txStatus: receipt?.status === "success" ? "confirmed" : "reverted",
         gasUsed: receipt?.gasUsed?.toString() ?? "0",
-        blockNumber: event.blockNumber,
-        timestamp: block ? new Date(block.timestamp * 1000).toISOString() : ""
+        blockNumber: Number(blockNumber),
+        timestamp: block ? new Date(Number(block.timestamp) * 1000).toISOString() : ""
       };
     };
 
-    const depositLogs = depositEvents.filter(isEventLog);
-    const withdrawLogs = withdrawEvents.filter(isEventLog);
-    const rebalanceLogs = rebalanceEvents.filter(isEventLog);
-
     activityRows.push(
-      ...(await Promise.all(depositLogs.map((e) => mapEvent(e, "deposit")))),
-      ...(await Promise.all(withdrawLogs.map((e) => mapEvent(e, "withdraw")))),
-      ...(await Promise.all(rebalanceLogs.map((e) => mapEvent(e, "rebalance"))))
+      ...(await Promise.all(depositEvents.map((event) => mapEvent(event, "deposit")))),
+      ...(await Promise.all(withdrawEvents.map((event) => mapEvent(event, "withdraw")))),
+      ...(await Promise.all(rebalanceEvents.map((event) => mapEvent(event, "rebalance"))))
     );
 
     const lastByAgent = new Map<string, string>();
-    for (const event of [...depositLogs, ...withdrawLogs, ...rebalanceLogs]) {
-      const agent = event.args[0] as string;
-      const action = event.eventName.replace("Executed", "").toLowerCase();
-      lastByAgent.set(agent.toLowerCase(), action);
+    for (const event of [...depositEvents, ...withdrawEvents, ...rebalanceEvents]) {
+      const args = event.args as { agent: Address };
+      const eventName = event.eventName as string;
+      lastByAgent.set(args.agent.toLowerCase(), eventName.replace("Executed", "").toLowerCase());
     }
 
     for (const row of agentRows) {
