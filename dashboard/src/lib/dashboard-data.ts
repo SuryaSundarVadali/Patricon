@@ -20,10 +20,12 @@ export type NetworkInfo = {
 
 export type AgentRow = {
   agent: string;
+  accountType: "EOA" | "Safe";
   agentTypeHash: string;
   didHash: string;
   policyHash: string;
   lastAction: string;
+  active: boolean;
 };
 
 export type PolicyRow = {
@@ -36,8 +38,12 @@ export type PolicyRow = {
 
 export type ActivityRow = {
   txHash: string;
-  action: string;
-  status: string;
+  actionType: string;
+  agent: string;
+  poolOrAsset: string;
+  amount: string;
+  proofStatus: string;
+  txStatus: string;
   gasUsed: string;
   blockNumber: number;
   timestamp: string;
@@ -152,14 +158,18 @@ export async function loadDashboardData(networkName: string): Promise<DashboardD
       if (!isEventLog(event)) {
         continue;
       }
-      const [agent, didHash, agentTypeHash] = event.args;
+      const [agent, didHash, agentTypeHash, _publicKeyHash, _identityCommitment, _identityVersion, active] = event.args;
       const linkedPolicy = policyRows.find((p) => p.agent.toLowerCase() === agent.toLowerCase());
+
+      const bytecode = await provider.getCode(agent);
       agentRows.push({
         agent,
         didHash,
         agentTypeHash,
+        accountType: bytecode !== "0x" ? "Safe" : "EOA",
         policyHash: linkedPolicy?.policyHash ?? "-",
-        lastAction: "-"
+        lastAction: "-",
+        active
       });
     }
   }
@@ -175,10 +185,15 @@ export async function loadDashboardData(networkName: string): Promise<DashboardD
     const mapEvent = async (event: EventLog, action: string): Promise<ActivityRow> => {
       const receipt = await event.getTransactionReceipt();
       const block = await provider.getBlock(event.blockNumber);
+      const [agent, amount, tokenId] = event.args;
       return {
         txHash: event.transactionHash,
-        action,
-        status: receipt?.status === 1 ? "confirmed" : "reverted",
+        actionType: action,
+        agent,
+        poolOrAsset: `Token #${Number(tokenId)}`,
+        amount: amount.toString(),
+        proofStatus: "Proof ✓",
+        txStatus: receipt?.status === 1 ? "confirmed" : "reverted",
         gasUsed: receipt?.gasUsed?.toString() ?? "0",
         blockNumber: event.blockNumber,
         timestamp: block ? new Date(block.timestamp * 1000).toISOString() : ""

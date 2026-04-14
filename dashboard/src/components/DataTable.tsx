@@ -2,20 +2,35 @@ import type { ReactNode } from "react";
 
 type DataTableProps = {
   title: string;
+  description?: string;
   columns: string[];
   rows: ReactNode[][];
   emptyText: string;
+  emptyAction?: ReactNode;
 };
 
-export function DataTable({ title, columns, rows, emptyText }: DataTableProps) {
+export function DataTable({
+  title,
+  description,
+  columns,
+  rows,
+  emptyText,
+  emptyAction
+}: DataTableProps) {
   return (
     <section className="panel">
-      <h2>{title}</h2>
+      <div className="panel-header-row">
+        <h3>{title}</h3>
+      </div>
+      {description && <p className="muted">{description}</p>}
       {rows.length === 0 ? (
-        <p className="muted">{emptyText}</p>
+        <div className="empty-state">
+          <p>{emptyText}</p>
+          {emptyAction}
+        </div>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table className="data-table">
             <thead>
               <tr>
                 {columns.map((col) => (
@@ -27,7 +42,7 @@ export function DataTable({ title, columns, rows, emptyText }: DataTableProps) {
               {rows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
                   {row.map((cell, cellIndex) => (
-                    <td key={cellIndex}>{cell}</td>
+                    <td key={cellIndex} data-label={columns[cellIndex] ?? ""}>{cell}</td>
                   ))}
                 </tr>
               ))}

@@ -71,6 +71,15 @@ type Props = {
   data: DashboardData;
 };
 
+type PendingAction = "register-agent" | "update-policy" | "execute-settlement" | null;
+
+type ToastType = "success" | "error";
+
+type ToastState = {
+  type: ToastType;
+  message: string;
+} | null;
+
 const zeroAddress = "0x0000000000000000000000000000000000000000";
 
 function toBytes32(value: string): `0x${string}` {
@@ -82,6 +91,13 @@ export function WalletActionsPanel({ data }: Props) {
   const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useWriteContract();
   const [status, setStatus] = useState("No action submitted yet.");
+  const [confirmAction, setConfirmAction] = useState<PendingAction>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  function showToast(type: ToastType, message: string) {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 4000);
+  }
 
   async function waitAndReport(hash: `0x${string}`) {
     if (!publicClient) {
@@ -89,15 +105,22 @@ export function WalletActionsPanel({ data }: Props) {
     }
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     setStatus(`Confirmed tx ${hash} with status ${receipt.status}`);
+    if (receipt.status === "success") {
+      showToast("success", `Transaction confirmed: ${hash.slice(0, 10)}...`);
+    } else {
+      showToast("error", `Transaction reverted: ${hash.slice(0, 10)}...`);
+    }
   }
 
   async function handleRegisterAgent() {
     if (!address || !isConnected) {
       setStatus("Connect a wallet first.");
+      showToast("error", "Connect a wallet before submitting actions.");
       return;
     }
     if (data.deployment.agentRegistry === zeroAddress) {
       setStatus("AgentRegistry not configured in deployment JSON.");
+      showToast("error", "Agent registry is not configured for this network.");
       return;
     }
 
@@ -106,7 +129,15 @@ export function WalletActionsPanel({ data }: Props) {
       abi: agentRegistryAbi,
       address: data.deployment.agentRegistry as `0x${string}`,
       functionName: "registerOrUpdateAgent",
-      args: [address, toBytes32("yield-farming-agent"), toBytes32("did:patricon:demo"), toBytes32("pubkey-demo"), toBytes32("identity-demo"), 1n, true]
+      args: [
+        address,
+        toBytes32("yield-farming-agent"),
+        toBytes32("did:patricon:demo"),
+        toBytes32("pubkey-demo"),
+        toBytes32("identity-demo"),
+        1n,
+        true
+      ]
     });
     await waitAndReport(txHash);
   }
@@ -114,10 +145,12 @@ export function WalletActionsPanel({ data }: Props) {
   async function handleUpdatePolicy() {
     if (!address || !isConnected) {
       setStatus("Connect a wallet first.");
+      showToast("error", "Connect a wallet before submitting actions.");
       return;
     }
     if (data.deployment.policyRegistry === zeroAddress) {
       setStatus("PolicyRegistry not configured in deployment JSON.");
+      showToast("error", "Policy registry is not configured for this network.");
       return;
     }
 
@@ -134,10 +167,12 @@ export function WalletActionsPanel({ data }: Props) {
   async function handleSettlementDemo() {
     if (!address || !isConnected) {
       setStatus("Connect a wallet first.");
+      showToast("error", "Connect a wallet before submitting actions.");
       return;
     }
     if (data.deployment.settlementConnector === zeroAddress) {
       setStatus("SettlementConnector not configured in deployment JSON.");
+      showToast("error", "Settlement connector is not configured for this network.");
       return;
     }
 
@@ -186,25 +221,112 @@ export function WalletActionsPanel({ data }: Props) {
     await waitAndReport(txHash);
   }
 
+  async function runConfirmedAction() {
+    const current = confirmAction;
+    if (!current) {
+      return;
+    }
+    setConfirmAction(null);
+    try {
+      if (current === "register-agent") {
+        await handleRegisterAgent();
+      }
+      if (current === "update-policy") {
+        await handleUpdatePolicy();
+      }
+      if (current === "execute-settlement") {
+        await handleSettlementDemo();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus(`Action failed: ${message}`);
+      showToast("error", message);
+    }
+  }
+
+  const actionLabel =
+    confirmAction === "register-agent"
+      ? "Register Agent"
+      : confirmAction === "update-policy"
+        ? "Update Policy"
+        : confirmAction === "execute-settlement"
+          ? "Execute Settlement"
+          : "";
+
   return (
-    <section className="panel">
-      <h2>Wallet Actions</h2>
-      <p className="muted">
-        These actions are signed by the connected wallet only. Patricon does not store private
-        keys.
-      </p>
-      <div className="wallet-buttons">
-        <button disabled={!isConnected || isPending} onClick={handleRegisterAgent}>
-          Register Agent (Demo)
-        </button>
-        <button disabled={!isConnected || isPending} onClick={handleUpdatePolicy}>
-          Update Policy (Demo)
-        </button>
-        <button disabled={!isConnected || isPending} onClick={handleSettlementDemo}>
-          Trigger Settlement (Demo)
-        </button>
-      </div>
-      <p className="muted">{status}</p>
-    </section>
+    <>
+      {toast && (
+        <aside className={`toast ${toast.type}`} role="status" aria-live="polite">
+          <span className="toast-strip" aria-hidden="true" />
+          <p>{toast.message}</p>
+        </aside>
+      )}
+
+      {confirmAction && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal glass-panel" role="dialog" aria-modal="true" aria-label="Confirm action">
+            <h3>Confirm {actionLabel}</h3>
+            <p>
+              This action will open your wallet for signature approval. No private keys are ever
+              requested by Patricon.
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setConfirmAction(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={runConfirmedAction}>
+                Confirm and sign
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <section className="panel" id="actions">
+        <h3>Operator Actions</h3>
+        <p className="muted">
+          Submit signer-approved actions for registration, policy updates, and settlement flows.
+        </p>
+        <div className="action-grid">
+          <article className="action-card">
+            <h4>Register Agent</h4>
+            <p>Bind your connected account to an identity commitment and policy-aware agent type.</p>
+            <button
+              className="btn btn-primary"
+              disabled={!isConnected || isPending}
+              onClick={() => setConfirmAction("register-agent")}
+            >
+              Register agent
+            </button>
+          </article>
+          <article className="action-card">
+            <h4>Update Policy</h4>
+            <p>Activate policy versions and keep enforcement aligned with current circuit versions.</p>
+            <button
+              className="btn btn-secondary"
+              disabled={!isConnected || isPending}
+              onClick={() => setConfirmAction("update-policy")}
+            >
+              Update policy
+            </button>
+          </article>
+          <article className="action-card">
+            <h4>Execute Settlement</h4>
+            <p>Trigger a proof-gated settlement transaction through the settlement connector.</p>
+            <button
+              className="btn btn-secondary"
+              disabled={!isConnected || isPending}
+              onClick={() => setConfirmAction("execute-settlement")}
+            >
+              Execute settlement
+            </button>
+          </article>
+        </div>
+        <div className="action-status">
+          <span className={`loading-dot ${isPending ? "active" : ""}`} aria-hidden="true" />
+          <p className="muted">{isPending ? "Awaiting wallet confirmation..." : status}</p>
+        </div>
+      </section>
+    </>
   );
 }

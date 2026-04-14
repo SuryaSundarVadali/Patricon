@@ -11,6 +11,7 @@ node_modules/
 *.log
 
 # Build outputs
+out/
 dist/
 build/
 coverage/

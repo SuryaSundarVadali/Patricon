@@ -5,7 +5,20 @@ function shorten(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function WalletPanel() {
+type WalletPanelProps = {
+  variant?: "full" | "compact";
+};
+
+function accountLabel(isConnected: boolean, address?: string, accountType?: string) {
+  if (!isConnected || !address) {
+    return "Not connected";
+  }
+
+  const mode = accountType?.includes("Smart") ? "Safe smart account" : "EOA";
+  return `Connected: ${shorten(address)} (${mode})`;
+}
+
+export function WalletPanel({ variant = "full" }: WalletPanelProps) {
   const { address, connector, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -46,28 +59,51 @@ export function WalletPanel() {
     [connectors]
   );
 
+  if (variant === "compact") {
+    return (
+      <div className="wallet-chip-wrap">
+        <span className={`status-chip ${isConnected ? "connected" : "disconnected"}`}>
+          {accountLabel(isConnected, address, accountType)}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <section className="panel">
-      <h2>Wallet</h2>
+    <section className="panel" id="wallet-access">
+      <div className="panel-header-row">
+        <h3>Wallet Access</h3>
+        <span className={`status-chip ${isConnected ? "connected" : "disconnected"}`}>
+          {accountLabel(isConnected, address, accountType)}
+        </span>
+      </div>
       {!isConnected ? (
-        <div className="wallet-buttons">
-          {availableConnectors.map((c) => (
-            <button key={c.uid} disabled={isPending} onClick={() => connect({ connector: c })}>
-              Connect {c.name}
-            </button>
-          ))}
-        </div>
+        <>
+          <p className="muted">Choose a signer. All actions are authorized in wallet pop-ups.</p>
+          <div className="wallet-buttons">
+            {availableConnectors.map((c) => (
+              <button key={c.uid} disabled={isPending} onClick={() => connect({ connector: c })}>
+                Connect {c.name}
+              </button>
+            ))}
+          </div>
+        </>
       ) : (
-        <div>
-          <p>Connected: {address ? shorten(address) : "-"}</p>
+        <div className="wallet-meta">
           <p>Connector: {connector?.name ?? "Unknown"}</p>
           <p>Account type: {accountType}</p>
-          <button onClick={() => disconnect()}>Disconnect</button>
+          <button className="btn btn-secondary" onClick={() => disconnect()}>
+            Disconnect
+          </button>
         </div>
       )}
       <p className="muted">
-        Supported wallets include MetaMask, Rabby and Phantom EVM via injected providers,
-        WalletConnect-compatible wallets, and Safe-based smart accounts where available.
+        Supported signers include MetaMask, injected wallets, WalletConnect wallets, and
+        ERC-4337 compatible smart accounts such as Safe.
+      </p>
+      <p className="muted wallet-note">
+        Patricon never asks for private keys or .env secrets. Signing happens only through your
+        wallet provider.
       </p>
     </section>
   );
