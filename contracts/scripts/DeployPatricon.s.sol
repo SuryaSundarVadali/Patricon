@@ -3,11 +3,17 @@ pragma solidity ^0.8.24;
 
 import {AgentRegistry} from "../contracts/identity/AgentRegistry.sol";
 import {PolicyRegistry} from "../contracts/policy/PolicyRegistry.sol";
-import {VerifierIdentity} from "../contracts/verifier/PatriconIdentityVerifier.sol";
+import {
+    VerifierIdentity
+} from "../contracts/verifier/PatriconIdentityVerifier.sol";
 import {VerifierPolicy} from "../contracts/verifier/PatriconPolicyVerifier.sol";
 import {MockYieldPool} from "../contracts/adapters/MockYieldPool.sol";
-import {PolicyEnforcedDeFiAdapter} from "../contracts/adapters/PolicyEnforcedDeFiAdapter.sol";
-import {SettlementConnector} from "../contracts/adapters/SettlementConnector.sol";
+import {
+    PolicyEnforcedDeFiAdapter
+} from "../contracts/adapters/PolicyEnforcedDeFiAdapter.sol";
+import {
+    SettlementConnector
+} from "../contracts/adapters/SettlementConnector.sol";
 
 interface Vm {
     function startBroadcast() external;
@@ -19,7 +25,8 @@ interface Vm {
 /// @dev run(address targetPoolOverride) deploys a full stack and returns all deployed addresses.
 ///      If targetPoolOverride is zero address, a MockYieldPool is deployed and used.
 contract DeployPatricon {
-    Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    Vm internal constant VM =
+        Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     event ContractsDeployed(
         address identityVerifier,
@@ -48,7 +55,9 @@ contract DeployPatricon {
         return _run(address(0));
     }
 
-    function run(address targetPoolOverride)
+    function run(
+        address targetPoolOverride
+    )
         external
         returns (
             address identityVerifier,
@@ -63,7 +72,9 @@ contract DeployPatricon {
         return _run(targetPoolOverride);
     }
 
-    function _run(address targetPoolOverride)
+    function _run(
+        address targetPoolOverride
+    )
         internal
         returns (
             address identityVerifier,
@@ -98,7 +109,9 @@ contract DeployPatricon {
             )
         );
 
-        settlementConnector = address(new SettlementConnector(policyRegistry, policyVerifier));
+        settlementConnector = address(
+            new SettlementConnector(policyRegistry, policyVerifier)
+        );
 
         VM.stopBroadcast();
 
