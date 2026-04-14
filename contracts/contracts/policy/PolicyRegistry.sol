@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IPolicyRegistry} from "./IPolicyRegistry.sol";
+import {IAgentRegistry} from "../identity/IAgentRegistry.sol";
 
 /// @title Patricon PolicyRegistry
 /// @notice Stores policy configuration and policy hash per agent for proof-gated execution.
@@ -13,6 +14,8 @@ contract PolicyRegistry is IPolicyRegistry {
     error InvalidVersion();
     error InvalidPolicyStatus();
     error ContractPaused();
+    error AgentNotActive();
+    error CallerNotAgent();
 
     bytes32 public constant POLICY_ADMIN_ROLE = keccak256("POLICY_ADMIN_ROLE");
     bytes32 public constant EMERGENCY_ADMIN_ROLE = keccak256("EMERGENCY_ADMIN_ROLE");
@@ -33,6 +36,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     address public owner;
     bool public paused;
+    IAgentRegistry public immutable agentRegistryRef;
 
     bytes32 private constant DEFAULT_ADMIN_ROLE = 0x00;
     mapping(bytes32 => mapping(address => bool)) private _roles;
@@ -65,8 +69,11 @@ contract PolicyRegistry is IPolicyRegistry {
         _;
     }
 
-    constructor() {
+    constructor(address agentRegistry_) {
+        if (agentRegistry_ == address(0)) revert InvalidAgent();
+
         owner = msg.sender;
+        agentRegistryRef = IAgentRegistry(agentRegistry_);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(POLICY_ADMIN_ROLE, msg.sender);
         _grantRole(EMERGENCY_ADMIN_ROLE, msg.sender);
@@ -85,6 +92,11 @@ contract PolicyRegistry is IPolicyRegistry {
 
     function _whenNotPaused() internal view {
         if (paused) revert ContractPaused();
+    }
+
+    function _ensureActiveAgent(address agent) internal view {
+        (,,, bool active) = agentRegistryRef.getAgentBinding(agent);
+        if (!active) revert AgentNotActive();
     }
 
     function hasRole(bytes32 role, address account) external view returns (bool) {
@@ -144,13 +156,29 @@ contract PolicyRegistry is IPolicyRegistry {
         emit AdminUpdated(admin, enabled);
     }
 
+    function selfRegisterPolicy(bytes32 policyHash, uint64 policyVersion, uint64 circuitVersion)
+        external
+        whenNotPaused
+    {
+        _ensureActiveAgent(msg.sender);
+        _register(msg.sender, policyHash, policyVersion, circuitVersion, true);
+    }
+
     function registerOrUpdatePolicy(
         address agent,
         bytes32 policyHash,
         uint64 policyVersion,
         uint64 circuitVersion,
         bool active
-    ) external onlyRole(POLICY_ADMIN_ROLE) whenNotPaused {
+    ) external whenNotPaused {
+        if (agent != msg.sender) revert CallerNotAgent();
+        _ensureActiveAgent(msg.sender);
+        _register(msg.sender, policyHash, policyVersion, circuitVersion, active);
+    }
+
+    function _register(address agent, bytes32 policyHash, uint64 policyVersion, uint64 circuitVersion, bool active)
+        internal
+    {
         if (agent == address(0)) revert InvalidAgent();
         if (policyHash == bytes32(0)) revert InvalidPolicyHash();
         if (policyVersion == 0 || circuitVersion == 0) revert InvalidVersion();

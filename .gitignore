@@ -37,6 +37,7 @@ contracts/cache/
 contracts/typechain-types/
 contracts/out/
 contracts/broadcast/
+contracts/lib/**
 
 # Dashboard build
 dashboard/dist/

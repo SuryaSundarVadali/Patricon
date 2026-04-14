@@ -4,6 +4,11 @@ pragma solidity ^0.8.24;
 /// @title IAgentRegistry
 /// @notice Read-only interface consumed by proof-gated adapters.
 interface IAgentRegistry {
+    /// @notice Emitted when an agent account links to an ERC-8004 identity NFT.
+    event ERC8004IdentityLinked(
+        address indexed agent, address indexed identityRegistry, uint256 indexed erc8004AgentId
+    );
+
     /// @notice Returns binding data for an agent address.
     /// @param agent Agent account address.
     /// @return didHash DID hash associated with the agent.
@@ -18,4 +23,9 @@ interface IAgentRegistry {
     /// @notice Returns the latest identity registry Merkle root.
     /// @return Current Merkle root.
     function identityMerkleRoot() external view returns (bytes32);
+
+    /// @notice Links an active agent account to an ERC-8004 identity token it owns.
+    /// @param identityRegistry ERC-8004 identity registry contract address.
+    /// @param erc8004AgentId ERC-8004 agent NFT id.
+    function linkERC8004Identity(address identityRegistry, uint256 erc8004AgentId) external;
 }

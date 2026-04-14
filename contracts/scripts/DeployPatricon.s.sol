@@ -79,8 +79,8 @@ contract DeployPatricon {
 
         identityVerifier = address(new VerifierIdentity());
         policyVerifier = address(new VerifierPolicy());
-        policyRegistry = address(new PolicyRegistry());
         agentRegistry = address(new AgentRegistry());
+        policyRegistry = address(new PolicyRegistry(agentRegistry));
 
         if (targetPoolOverride == address(0)) {
             targetPool = address(new MockYieldPool());

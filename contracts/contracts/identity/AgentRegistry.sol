@@ -3,6 +3,10 @@ pragma solidity ^0.8.24;
 
 import {IAgentRegistry} from "./IAgentRegistry.sol";
 
+interface IERC8004IdentityOwner {
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
 /// @title Patricon AgentRegistry
 /// @notice Registers agents, identity bindings, and registry Merkle root used by identity proofs.
 contract AgentRegistry is IAgentRegistry {
@@ -13,6 +17,8 @@ contract AgentRegistry is IAgentRegistry {
     error InvalidVersion();
     error ContractPaused();
     error InvalidTransition();
+    error CallerNotAgent();
+    error ERC8004LinkFailed(uint256 agentId);
 
     bytes32 public constant AGENT_REGISTRAR_ROLE = keccak256("AGENT_REGISTRAR_ROLE");
     bytes32 public constant MERKLE_ADMIN_ROLE = keccak256("MERKLE_ADMIN_ROLE");
@@ -31,6 +37,7 @@ contract AgentRegistry is IAgentRegistry {
         bytes32 publicKeyHash;
         bytes32 identityCommitment;
         uint64 identityVersion;
+        uint256 erc8004AgentId;
         AgentStatus status;
     }
 
@@ -42,6 +49,7 @@ contract AgentRegistry is IAgentRegistry {
 
     mapping(address => bool) public admins;
     mapping(address => AgentRecord) private agents;
+    mapping(address => address) public erc8004IdentityRegistryOf;
 
     bytes32 public identityMerkleRoot;
     uint64 public identityMerkleRootVersion;
@@ -167,7 +175,18 @@ contract AgentRegistry is IAgentRegistry {
         emit AdminUpdated(admin, enabled);
     }
 
-    /// @notice Registers or updates a non-revoked agent record.
+    /// @notice Permissionless self-registration for caller-owned agent records.
+    function selfRegisterAgent(
+        bytes32 agentType,
+        bytes32 didHash,
+        bytes32 publicKeyHash,
+        bytes32 identityCommitment,
+        uint64 identityVersion
+    ) external whenNotPaused {
+        _registerOrUpdate(msg.sender, agentType, didHash, publicKeyHash, identityCommitment, identityVersion, true);
+    }
+
+    /// @notice Backward-compatible registration wrapper with caller=self enforcement.
     function registerOrUpdateAgent(
         address agent,
         bytes32 agentType,
@@ -176,7 +195,20 @@ contract AgentRegistry is IAgentRegistry {
         bytes32 identityCommitment,
         uint64 identityVersion,
         bool active
-    ) external onlyRole(AGENT_REGISTRAR_ROLE) whenNotPaused {
+    ) external whenNotPaused {
+        if (agent != msg.sender) revert CallerNotAgent();
+        _registerOrUpdate(agent, agentType, didHash, publicKeyHash, identityCommitment, identityVersion, active);
+    }
+
+    function _registerOrUpdate(
+        address agent,
+        bytes32 agentType,
+        bytes32 didHash,
+        bytes32 publicKeyHash,
+        bytes32 identityCommitment,
+        uint64 identityVersion,
+        bool active
+    ) internal {
         if (agent == address(0)) revert InvalidAgent();
         if (didHash == bytes32(0) || publicKeyHash == bytes32(0) || identityCommitment == bytes32(0)) {
             revert InvalidHash();
@@ -184,12 +216,15 @@ contract AgentRegistry is IAgentRegistry {
         if (identityVersion == 0) revert InvalidVersion();
         if (agents[agent].status == AgentStatus.Revoked) revert InvalidTransition();
 
+        uint256 linkedErc8004AgentId = agents[agent].erc8004AgentId;
+
         agents[agent] = AgentRecord({
             agentType: agentType,
             didHash: didHash,
             publicKeyHash: publicKeyHash,
             identityCommitment: identityCommitment,
             identityVersion: identityVersion,
+            erc8004AgentId: linkedErc8004AgentId,
             status: active ? AgentStatus.Active : AgentStatus.Paused
         });
 
@@ -225,6 +260,26 @@ contract AgentRegistry is IAgentRegistry {
         identityMerkleRoot = merkleRoot;
         identityMerkleRootVersion = rootVersion;
         emit IdentityMerkleRootUpdated(merkleRoot, rootVersion);
+    }
+
+    /// @inheritdoc IAgentRegistry
+    function linkERC8004Identity(address identityRegistry, uint256 erc8004AgentId) external {
+        if (identityRegistry == address(0) || erc8004AgentId == 0) revert ERC8004LinkFailed(erc8004AgentId);
+        if (agents[msg.sender].status != AgentStatus.Active) revert InvalidTransition();
+
+        address tokenOwner;
+        try IERC8004IdentityOwner(identityRegistry).ownerOf(erc8004AgentId) returns (address ownerOfToken) {
+            tokenOwner = ownerOfToken;
+        } catch {
+            revert ERC8004LinkFailed(erc8004AgentId);
+        }
+
+        if (tokenOwner != msg.sender) revert ERC8004LinkFailed(erc8004AgentId);
+
+        agents[msg.sender].erc8004AgentId = erc8004AgentId;
+        erc8004IdentityRegistryOf[msg.sender] = identityRegistry;
+
+        emit ERC8004IdentityLinked(msg.sender, identityRegistry, erc8004AgentId);
     }
 
     /// @inheritdoc IAgentRegistry

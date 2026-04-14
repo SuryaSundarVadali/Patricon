@@ -9,6 +9,7 @@ import {MockVerifierIdentity, MockVerifierPolicy} from "../contracts/verifier/mo
 
 interface Vm {
     function expectRevert(bytes calldata) external;
+    function prank(address) external;
 }
 
 contract PolicyEnforcedDeFiAdapterTest {
@@ -25,7 +26,7 @@ contract PolicyEnforcedDeFiAdapterTest {
 
     function setUp() public {
         agentRegistry = new AgentRegistry();
-        policyRegistry = new PolicyRegistry();
+        policyRegistry = new PolicyRegistry(address(agentRegistry));
         identityVerifier = new MockVerifierIdentity();
         policyVerifier = new MockVerifierPolicy();
         pool = new MockYieldPool();
@@ -44,11 +45,13 @@ contract PolicyEnforcedDeFiAdapterTest {
         bytes32 merkleRoot = bytes32(uint256(2001));
         bytes32 policyHash = bytes32(uint256(3001));
 
+        VM.prank(AGENT);
         agentRegistry.registerOrUpdateAgent(
             AGENT, keccak256("yield-farming-agent"), didHash, publicKeyHash, identityCommitment, 1, true
         );
         agentRegistry.updateIdentityMerkleRoot(merkleRoot, 1);
 
+        VM.prank(AGENT);
         policyRegistry.registerOrUpdatePolicy(AGENT, policyHash, 1, 1, true);
     }
 

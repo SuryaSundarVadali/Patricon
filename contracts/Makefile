@@ -1,6 +1,6 @@
 -include .env
 
-.PHONY: all test clean deploy deployDryRun deployLocal deployHashkey grantAgentRegistrarRole grantPolicyAdminRole fund help install snapshot format anvil scopefile flatten encryptKey
+.PHONY: all test clean deploy deployDryRun deployLocal deployHashkey deploy-erc8004 grantAgentRegistrarRole grantPolicyAdminRole fund help install snapshot format anvil scopefile flatten encryptKey
 
 DEFAULT_ANVIL_KEY := 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 DEFAULT_ZKSYNC_LOCAL_KEY := 0x7726827caac94a7f9e1b160f7ea819f172f7b6f9d2a97f992c38edeab82d4110
@@ -8,6 +8,7 @@ CONTRACT_DEPLOYER_SEPOLIA ?= $(DEPLOYER_ADDRESS)
 ZERO_ADDRESS := 0x0000000000000000000000000000000000000000
 PATRI_CON_DEPLOY_SCRIPT := scripts/DeployPatricon.s.sol:DeployPatricon
 PATRI_CON_ROLE_SCRIPT := scripts/GrantRoles.s.sol:GrantRoles
+PATRI_CON_ERC8004_DEPLOY_SCRIPT := scripts/DeployERC8004.s.sol:DeployERC8004
 
 RPC_URL ?= $(HASHKEY_TESTNET_RPC_URL)
 ACCOUNT ?= account1
@@ -65,6 +66,10 @@ deployLocal :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 
 deployHashkey :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 	forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url $(HASHKEY_TESTNET_RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
+
+deploy-erc8004 :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
+	@test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)
+	forge script $(PATRI_CON_ERC8004_DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
 
 grantAgentRegistrarRole :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 	@test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)
