@@ -12,7 +12,7 @@ interface Vm {
 }
 
 contract PolicyEnforcedDeFiAdapterTest {
-    Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     AgentRegistry internal agentRegistry;
     PolicyRegistry internal policyRegistry;
@@ -96,7 +96,7 @@ contract PolicyEnforcedDeFiAdapterTest {
         policySignals[13] = 19;
 
         policyVerifier.setShouldVerify(false);
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnforcedDeFiAdapter.PolicyProofInvalid.selector));
+        VM.expectRevert(abi.encodeWithSelector(PolicyEnforcedDeFiAdapter.PolicyProofInvalid.selector));
 
         adapter.depositWithProof(
             AGENT, 700, 11, 1_710_000_500, 19, emptyIdentityProof, identitySignals, emptyPolicyProof, policySignals
@@ -121,7 +121,7 @@ contract PolicyEnforcedDeFiAdapterTest {
         policySignals[12] = 1_710_000_500;
         policySignals[13] = 19;
 
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnforcedDeFiAdapter.PolicyHashMismatch.selector));
+        VM.expectRevert(abi.encodeWithSelector(PolicyEnforcedDeFiAdapter.PolicyHashMismatch.selector));
 
         adapter.depositWithProof(
             AGENT, 700, 11, 1_710_000_500, 19, emptyIdentityProof, identitySignals, emptyPolicyProof, policySignals

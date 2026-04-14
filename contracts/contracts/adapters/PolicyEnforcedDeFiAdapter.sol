@@ -1,18 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {PolicyRegistry} from "../policy/PolicyRegistry.sol";
-import {AgentRegistry} from "../identity/AgentRegistry.sol";
+import {IPolicyRegistry} from "../policy/IPolicyRegistry.sol";
+import {IAgentRegistry} from "../identity/IAgentRegistry.sol";
 import {IVerifierIdentity} from "../verifier/IVerifierIdentity.sol";
 import {IVerifierPolicy} from "../verifier/IVerifierPolicy.sol";
-
-interface IYieldPool {
-    function deposit(address beneficiary, uint256 amount, uint256 tokenId) external;
-
-    function withdraw(address beneficiary, uint256 amount, uint256 tokenId) external;
-
-    function rebalance(address beneficiary, uint256 amount, uint256 fromTokenId, uint256 toTokenId) external;
-}
+import {IYieldPool} from "./IYieldPool.sol";
 
 /// @title Patricon PolicyEnforcedDeFiAdapter
 /// @notice Proof-gated wrapper around a DeFi pool for deposit/withdraw/rebalance operations.
@@ -25,6 +18,10 @@ interface IYieldPool {
 ///      [11]=tokenId, [12]=newTradeTimestamp, [13]=tradeNonce
 contract PolicyEnforcedDeFiAdapter {
     error InvalidAddress();
+    error InvalidAmount();
+    error Unauthorized();
+    error ContractPaused();
+    error ReentrancyBlocked();
     error UnknownOrInactiveAgent();
     error UnknownOrInactivePolicy();
     error PolicyHashMismatch();
@@ -40,17 +37,71 @@ contract PolicyEnforcedDeFiAdapter {
         uint256[2] pC;
     }
 
-    PolicyRegistry public immutable policyRegistry;
-    AgentRegistry public immutable agentRegistry;
-    IVerifierIdentity public immutable identityVerifier;
-    IVerifierPolicy public immutable policyVerifier;
-    IYieldPool public immutable targetPool;
+    IPolicyRegistry public immutable POLICY_REGISTRY;
+    IAgentRegistry public immutable AGENT_REGISTRY;
+    IVerifierIdentity public immutable IDENTITY_VERIFIER;
+    IVerifierPolicy public immutable POLICY_VERIFIER;
+    IYieldPool public immutable TARGET_POOL;
+
+    address public owner;
+    bool public paused;
+    bool public permissionlessExecution;
+    mapping(address => bool) public executors;
+
+    uint256 private _reentrancyLock;
 
     event DepositExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce);
     event WithdrawExecuted(address indexed agent, uint256 amount, uint256 tokenId, uint256 tradeNonce);
     event RebalanceExecuted(
         address indexed agent, uint256 amount, uint256 fromTokenId, uint256 toTokenId, uint256 tradeNonce
     );
+
+    event OwnerUpdated(address indexed previousOwner, address indexed newOwner);
+    event ExecutorUpdated(address indexed executor, bool allowed);
+    event PauseStateUpdated(bool paused);
+    event PermissionlessExecutionUpdated(bool enabled);
+
+    modifier onlyOwner() {
+        _onlyOwner();
+        _;
+    }
+
+    modifier onlyExecutor() {
+        _onlyExecutor();
+        _;
+    }
+
+    modifier whenNotPaused() {
+        _whenNotPaused();
+        _;
+    }
+
+    modifier nonReentrant() {
+        _nonReentrantBefore();
+        _;
+        _nonReentrantAfter();
+    }
+
+    function _onlyOwner() internal view {
+        if (msg.sender != owner) revert Unauthorized();
+    }
+
+    function _onlyExecutor() internal view {
+        if (!(permissionlessExecution || msg.sender == owner || executors[msg.sender])) revert Unauthorized();
+    }
+
+    function _whenNotPaused() internal view {
+        if (paused) revert ContractPaused();
+    }
+
+    function _nonReentrantBefore() internal {
+        if (_reentrancyLock == 1) revert ReentrancyBlocked();
+        _reentrancyLock = 1;
+    }
+
+    function _nonReentrantAfter() internal {
+        _reentrancyLock = 0;
+    }
 
     constructor(
         address targetPool_,
@@ -66,11 +117,48 @@ contract PolicyEnforcedDeFiAdapter {
             revert InvalidAddress();
         }
 
-        targetPool = IYieldPool(targetPool_);
-        policyRegistry = PolicyRegistry(policyRegistry_);
-        agentRegistry = AgentRegistry(agentRegistry_);
-        identityVerifier = IVerifierIdentity(identityVerifier_);
-        policyVerifier = IVerifierPolicy(policyVerifier_);
+        TARGET_POOL = IYieldPool(targetPool_);
+        POLICY_REGISTRY = IPolicyRegistry(policyRegistry_);
+        AGENT_REGISTRY = IAgentRegistry(agentRegistry_);
+        IDENTITY_VERIFIER = IVerifierIdentity(identityVerifier_);
+        POLICY_VERIFIER = IVerifierPolicy(policyVerifier_);
+
+        owner = msg.sender;
+        permissionlessExecution = true;
+        emit OwnerUpdated(address(0), msg.sender);
+        emit PermissionlessExecutionUpdated(true);
+    }
+
+    /// @notice Transfers adapter ownership.
+    function setOwner(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert InvalidAddress();
+        emit OwnerUpdated(owner, newOwner);
+        owner = newOwner;
+    }
+
+    /// @notice Enables/disables an executor account.
+    function setExecutor(address executor, bool allowed) external onlyOwner {
+        if (executor == address(0)) revert InvalidAddress();
+        executors[executor] = allowed;
+        emit ExecutorUpdated(executor, allowed);
+    }
+
+    /// @notice Enables/disables permissionless execution.
+    function setPermissionlessExecution(bool enabled) external onlyOwner {
+        permissionlessExecution = enabled;
+        emit PermissionlessExecutionUpdated(enabled);
+    }
+
+    /// @notice Pauses adapter action entrypoints.
+    function pause() external onlyOwner {
+        paused = true;
+        emit PauseStateUpdated(true);
+    }
+
+    /// @notice Unpauses adapter action entrypoints.
+    function unpause() external onlyOwner {
+        paused = false;
+        emit PauseStateUpdated(false);
     }
 
     function depositWithProof(
@@ -83,7 +171,8 @@ contract PolicyEnforcedDeFiAdapter {
         uint256[6] calldata identitySignals,
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
-    ) external {
+    ) external whenNotPaused onlyExecutor nonReentrant {
+        if (amount == 0) revert InvalidAmount();
         _validateProofContext(
             agent,
             amount,
@@ -96,7 +185,7 @@ contract PolicyEnforcedDeFiAdapter {
             policySignals
         );
 
-        targetPool.deposit(agent, amount, tokenId);
+        TARGET_POOL.deposit(agent, amount, tokenId);
         emit DepositExecuted(agent, amount, tokenId, tradeNonce);
     }
 
@@ -110,7 +199,8 @@ contract PolicyEnforcedDeFiAdapter {
         uint256[6] calldata identitySignals,
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
-    ) external {
+    ) external whenNotPaused onlyExecutor nonReentrant {
+        if (amount == 0) revert InvalidAmount();
         _validateProofContext(
             agent,
             amount,
@@ -123,7 +213,7 @@ contract PolicyEnforcedDeFiAdapter {
             policySignals
         );
 
-        targetPool.withdraw(agent, amount, tokenId);
+        TARGET_POOL.withdraw(agent, amount, tokenId);
         emit WithdrawExecuted(agent, amount, tokenId, tradeNonce);
     }
 
@@ -138,7 +228,8 @@ contract PolicyEnforcedDeFiAdapter {
         uint256[6] calldata identitySignals,
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
-    ) external {
+    ) external whenNotPaused onlyExecutor nonReentrant {
+        if (amount == 0) revert InvalidAmount();
         _validateProofContext(
             agent,
             amount,
@@ -151,7 +242,7 @@ contract PolicyEnforcedDeFiAdapter {
             policySignals
         );
 
-        targetPool.rebalance(agent, amount, fromTokenId, toTokenId);
+        TARGET_POOL.rebalance(agent, amount, fromTokenId, toTokenId);
         emit RebalanceExecuted(agent, amount, fromTokenId, toTokenId, tradeNonce);
     }
 
@@ -166,20 +257,34 @@ contract PolicyEnforcedDeFiAdapter {
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
     ) internal view {
-        (bytes32 policyHash,,, bool policyActive) = policyRegistry.getPolicyForAgent(agent);
-        if (!policyActive || policyHash == bytes32(0)) revert UnknownOrInactivePolicy();
+        (bytes32 policyHash,,, bool policyActive) = POLICY_REGISTRY.getPolicyForAgent(agent);
+        if (!policyActive || policyHash == bytes32(0)) {
+            revert UnknownOrInactivePolicy();
+        }
 
         (, bytes32 agentPublicKeyHash, bytes32 identityCommitment, bool agentActive) =
-            agentRegistry.getAgentBinding(agent);
-        if (!agentActive || identityCommitment == bytes32(0)) revert UnknownOrInactiveAgent();
+            AGENT_REGISTRY.getAgentBinding(agent);
+        if (!agentActive || identityCommitment == bytes32(0)) {
+            revert UnknownOrInactiveAgent();
+        }
 
-        if (identitySignals[0] != uint256(identityCommitment)) revert IdentitySignalMismatch();
-        if (identitySignals[2] != uint256(agentRegistry.identityMerkleRoot())) revert IdentitySignalMismatch();
-        if (identitySignals[3] != uint256(agentPublicKeyHash)) revert IdentitySignalMismatch();
-        if (identitySignals[4] != uint256(policyHash)) revert PolicyHashMismatch();
+        if (identitySignals[0] != uint256(identityCommitment)) {
+            revert IdentitySignalMismatch();
+        }
+        if (identitySignals[2] != uint256(AGENT_REGISTRY.identityMerkleRoot())) {
+            revert IdentitySignalMismatch();
+        }
+        if (identitySignals[3] != uint256(agentPublicKeyHash)) {
+            revert IdentitySignalMismatch();
+        }
+        if (identitySignals[4] != uint256(policyHash)) {
+            revert PolicyHashMismatch();
+        }
 
         // Policy circuit public signals must bind to current policy hash and the user action envelope.
-        if (policySignals[2] != uint256(policyHash)) revert PolicyHashMismatch();
+        if (policySignals[2] != uint256(policyHash)) {
+            revert PolicyHashMismatch();
+        }
         if (policySignals[11] != tokenId || policySignals[12] != executionTimestamp || policySignals[13] != tradeNonce)
         {
             revert PolicySignalMismatch();
@@ -189,10 +294,10 @@ contract PolicyEnforcedDeFiAdapter {
         if (amount > policySignals[3]) revert ActionNotPolicyCompliant();
 
         bool identityValid =
-            identityVerifier.verifyProof(identityProof.pA, identityProof.pB, identityProof.pC, identitySignals);
+            IDENTITY_VERIFIER.verifyProof(identityProof.pA, identityProof.pB, identityProof.pC, identitySignals);
         if (!identityValid) revert IdentityProofInvalid();
 
-        bool policyValid = policyVerifier.verifyProof(policyProof.pA, policyProof.pB, policyProof.pC, policySignals);
+        bool policyValid = POLICY_VERIFIER.verifyProof(policyProof.pA, policyProof.pB, policyProof.pC, policySignals);
         if (!policyValid) revert PolicyProofInvalid();
     }
 }

@@ -1,7 +1,12 @@
 {
+  "sepolia": {
+    "chainId": 11155111,
+    "rpcUrl": "",
+    "explorer": "https://sepolia.etherscan.io"
+  },
   "hashkeyTestnet": {
     "chainId": 133,
-    "rpcUrl": "https://rpc.testnet.hashkey.cloud",
+    "rpcUrl": "",
     "explorer": "https://hashkey.blockscout.com"
   }
 }

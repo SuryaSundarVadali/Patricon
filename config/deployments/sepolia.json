@@ -1,0 +1,11 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "identityVerifier": "0xFf746978E338A663d47D70685BF574F8A9D55fD9",
+  "policyVerifier": "0x1Ee045FBFed32c40000dab3B82D8E6Ad8113b3A2",
+  "policyRegistry": "0xf8Ece02b7F111657FfBE86Af2999C62ce35705c2",
+  "agentRegistry": "0x9f9c57c110355C570EBa9BDd30b1b54CFECB9d35",
+  "targetPool": "0xaCb173D4d4fC8CDAd531A3e5590a4726Ea0Ec545",
+  "policyEnforcedDeFiAdapter": "0xd1AF323c224eCe88a787c481c846e55b68c03E60",
+  "settlementConnector": "0xE2B11BAf8ea8252756fCec05f7a55Dd22A69FeCe"
+}

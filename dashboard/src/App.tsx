@@ -12,8 +12,9 @@ import { SettlementPage } from "./pages/SettlementPage";
 
 export default function App() {
   const location = useLocation();
-  const networkName = "hashkeyTestnet";
+  const networkName = (import.meta.env.VITE_DASHBOARD_NETWORK as string | undefined) ?? "sepolia";
   const { data, loading, error, retry } = useDashboardData(networkName);
+  const networkLabel = data?.deployment.network ?? networkName;
   const [menuOpen, setMenuOpen] = useState(false);
   const isOverviewRoute = location.pathname === "/";
   const routeTitles: Record<string, string> = {
@@ -51,7 +52,7 @@ export default function App() {
           </nav>
 
           <div className="nav-actions">
-            <span className="status-chip">HashKey Chain Testnet</span>
+            <span className="status-chip">{networkLabel}</span>
             <WalletPanel variant="compact" />
           </div>
         </div>

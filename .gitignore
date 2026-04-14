@@ -36,6 +36,7 @@ contracts/artifacts/
 contracts/cache/
 contracts/typechain-types/
 contracts/out/
+contracts/broadcast/
 
 # Dashboard build
 dashboard/dist/

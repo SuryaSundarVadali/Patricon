@@ -10,7 +10,7 @@ interface Vm {
 }
 
 contract SettlementConnectorTest {
-    Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     PolicyRegistry internal policyRegistry;
     MockVerifierPolicy internal policyVerifier;
@@ -62,7 +62,7 @@ contract SettlementConnectorTest {
         policySignals[13] = 21;
 
         policyVerifier.setShouldVerify(false);
-        vm.expectRevert(abi.encodeWithSelector(SettlementConnector.PolicyProofInvalid.selector));
+        VM.expectRevert(abi.encodeWithSelector(SettlementConnector.PolicyProofInvalid.selector));
 
         connector.executeSettlementWithProof(
             keccak256("payment-ref-2"),

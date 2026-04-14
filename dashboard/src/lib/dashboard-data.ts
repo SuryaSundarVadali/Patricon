@@ -108,14 +108,37 @@ async function loadNetwork(networkName: string): Promise<NetworkInfo> {
   const relativeUrl = "/config/networks.json";
   const fsUrl = `/@fs/${__PATRICON_CONFIG_DIR__}/networks.json`;
 
+  const envRpcUrlByNetwork: Record<string, string | undefined> = {
+    sepolia: import.meta.env.VITE_SEPOLIA_RPC_URL as string | undefined,
+    hashkeyTestnet: import.meta.env.VITE_HASHKEY_TESTNET_RPC_URL as string | undefined
+  };
+
+  const withRpcUrl = (network: NetworkInfo): NetworkInfo => {
+    if (network.rpcUrl && network.rpcUrl.trim().length > 0) {
+      return network;
+    }
+
+    const envRpc = envRpcUrlByNetwork[networkName];
+    if (!envRpc || envRpc.trim().length === 0) {
+      throw new Error(`Missing RPC URL for ${networkName}. Set VITE_${networkName === "sepolia" ? "SEPOLIA" : "HASHKEY_TESTNET"}_RPC_URL.`);
+    }
+
+    return { ...network, rpcUrl: envRpc };
+  };
+
   const fallback = async (): Promise<NetworkInfo> => {
     const all = await fetchJson<Record<string, NetworkInfo>>(fsUrl);
-    return all[networkName] ?? { chainId: 133, rpcUrl: "https://rpc.testnet.hashkey.cloud", explorer: "" };
+    const network = all[networkName];
+    if (!network) {
+      throw new Error(`Unknown network ${networkName} in config/networks.json`);
+    }
+    return withRpcUrl(network);
   };
 
   try {
     const all = await fetchJson<Record<string, NetworkInfo>>(relativeUrl);
-    return all[networkName] ?? (await fallback());
+    const network = all[networkName];
+    return network ? withRpcUrl(network) : await fallback();
   } catch {
     return fallback();
   }
