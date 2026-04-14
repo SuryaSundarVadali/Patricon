@@ -65,7 +65,9 @@ contract SettlementConnector {
         Groth16Proof calldata policyProof,
         uint256[14] calldata policySignals
     ) external {
-        if (payer == address(0) || payee == address(0) || asset == address(0)) revert InvalidPaymentParty();
+        if (payer == address(0) || payee == address(0) || asset == address(0)) {
+            revert InvalidPaymentParty();
+        }
         if (amount == 0) revert InvalidAmount();
 
         (bytes32 policyHash,,, bool active) = policyRegistry.getPolicyForAgent(agent);
@@ -80,7 +82,9 @@ contract SettlementConnector {
         bool valid = policyVerifier.verifyProof(policyProof.pA, policyProof.pB, policyProof.pC, policySignals);
         if (!valid) revert PolicyProofInvalid();
 
-        emit PaymentRequested(paymentRef, agent, payer, payee, asset, amount, executionTimestamp, tradeNonce, policyHash);
+        emit PaymentRequested(
+            paymentRef, agent, payer, payee, asset, amount, executionTimestamp, tradeNonce, policyHash
+        );
         emit PaymentExecuted(paymentRef, agent, payer, payee, asset, amount, policyHash);
     }
 }
