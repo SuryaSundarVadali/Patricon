@@ -1,3 +1,4 @@
+import { Contract } from "ethers";
 import { createHashKeyClients } from "./clients/hashkey-client.js";
 import { LivePoolStateClient, SimulatedPoolStateClient } from "./clients/pool-state-client.js";
 import { config } from "./config/env.js";
@@ -5,6 +6,9 @@ import { StructuredLogger } from "./logging/logger.js";
 import { PatriconAgent } from "./agents/patricon-agent.js";
 import { YieldFarmingStrategy } from "./strategies/yield-farming-strategy.js";
 import { PolicyProofService } from "./zk/policy-proof-service.js";
+import ProverService from "./zk/ProverService.js";
+import { PatriconZKGateAbi } from "./zk/PatriconZKGateAbi.js";
+import ZKPolicyEnforcer from "./zk/ZKPolicyEnforcer.js";
 
 async function main(): Promise<void> {
   const logger = new StructuredLogger("patricon.agent-service");
@@ -26,6 +30,8 @@ async function main(): Promise<void> {
       : new LivePoolStateClient(config.strategy.whitelistedTokenIds[0], config.strategy.maxExposure);
 
   const strategy = new YieldFarmingStrategy(config.strategy);
+  const zkGateContract = new Contract(config.contracts.zkGate, PatriconZKGateAbi, clients.signer);
+  const zkPolicyEnforcer = new ZKPolicyEnforcer(new ProverService(), zkGateContract);
   const proofService = new PolicyProofService({
     identity: {
       merkleRoot: config.identity.merkleRoot,
@@ -58,13 +64,20 @@ async function main(): Promise<void> {
   const agent = new PatriconAgent(
     {
       dryRun: config.dryRun,
-      signerAddress
+      signerAddress,
+      zkMinLimit: config.zkPolicy.minTrade,
+      zkMaxLimit: config.zkPolicy.maxTrade,
+      zkRequiredTier: config.zkPolicy.requiredKycTier,
+      zkJurisdiction: config.zkPolicy.jurisdictionCode,
+      zkTier: config.zkPolicy.agentKycTier
     },
     poolStateClient,
     strategy,
     proofService,
     clients.defiAdapter,
-    logger.child("runtime")
+    logger.child("runtime"),
+    zkPolicyEnforcer,
+    clients.signer
   );
 
   logger.info("Patricon agent initialized", {

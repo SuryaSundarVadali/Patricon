@@ -5,6 +5,8 @@ import { useAccount } from "wagmi";
 
 import { PageShell } from "../components/PageShell";
 import { TxToast } from "../components/TxToast";
+import ZKProofStatus from "../../components/ZKProofStatus";
+import type { AgentAction } from "../../api/zkApi";
 import { useAgentActions } from "../../hooks/agent/useAgentActions";
 import { useAgentState } from "../../hooks/agent/useAgentState";
 import { usePolicyProofWorker } from "../../hooks/usePolicyProofWorker";
@@ -29,6 +31,7 @@ export default function AgentPage() {
   const [status, setStatus] = useState<"idle" | "pending" | "confirmed" | "failed">("idle");
   const [statusMessage, setStatusMessage] = useState<string>();
   const [rejectReason, setRejectReason] = useState("");
+  const [lastAction, setLastAction] = useState<AgentAction | null>(null);
 
   const overview = state.data?.overview;
   const pending = state.data?.pendingActions ?? [];
@@ -47,6 +50,15 @@ export default function AgentPage() {
     try {
       setStatus("pending");
       setStatusMessage("Approving action...");
+
+      const pendingAction = pending.find((item) => item.id === actionId);
+      if (pendingAction) {
+        setLastAction({
+          tradeValue: pendingAction.amount,
+          jurisdiction: 1,
+          kycTier: 2
+        });
+      }
 
       if (proofRequired) {
         const policyState = policyRegistry.getPolicy.data as readonly [`0x${string}`, bigint, bigint, boolean] | undefined;
@@ -171,6 +183,8 @@ export default function AgentPage() {
           ))}
         </div>
       </section>
+
+      <ZKProofStatus agentAddress={agentAddress ?? ""} lastAction={lastAction} />
 
       <section className="app-card" style={{ marginTop: "1rem" }}>
         <h2 style={{ marginTop: 0 }}>Action History</h2>

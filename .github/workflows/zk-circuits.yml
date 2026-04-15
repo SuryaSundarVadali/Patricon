@@ -1,0 +1,193 @@
+name: zk-circuits
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - circuits/**
+      - contracts/verifiers/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - circuits/**
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compile-and-test-circuits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Clone and install circom from source
+        run: |
+          git clone https://github.com/iden3/circom
+          cd circom
+          cargo build --release
+          cargo install --path circom
+          circom --version
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install snarkjs globally
+        run: npm install -g snarkjs
+
+      - name: Restore cached Powers of Tau file
+        uses: actions/cache@v4
+        with:
+          path: circuits/keys/pot14_final.ptau
+          key: ${{ runner.os }}-pot14-${{ hashFiles('circuits/keys/pot14_final.ptau') }}
+          restore-keys: |
+            ${{ runner.os }}-pot14-
+
+      - name: Compile circuits
+        run: bash circuits/scripts/compile.sh
+
+      - name: Run trusted setup
+        env:
+          PATRICON_ZKEY_ENTROPY: ${{ secrets.PATRICON_ZKEY_ENTROPY }}
+        run: |
+          if [ -n "${PATRICON_ZKEY_ENTROPY}" ]; then
+            bash circuits/scripts/setup.sh --entropy="${PATRICON_ZKEY_ENTROPY}"
+          else
+            bash circuits/scripts/setup.sh --entropy="patricon-ci-test"
+          fi
+
+      - name: Generate and verify proofs
+        run: bash circuits/scripts/prove.sh
+
+      - name: Upload zk artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zk-artifacts-${{ github.sha }}
+          path: |
+            circuits/build/
+            circuits/keys/
+
+  export-and-verify-solidity:
+    runs-on: ubuntu-latest
+    needs: compile-and-test-circuits
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install snarkjs globally
+        run: npm install -g snarkjs
+
+      - name: Download zk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: zk-artifacts-${{ github.sha }}
+          path: .
+
+      - name: Export Solidity verifiers
+        run: bash circuits/scripts/export_verifier.sh
+
+      - name: Hardhat compile
+        run: |
+          cd contracts
+          npx hardhat compile
+
+      - name: Hardhat test PatriconZKGate
+        run: |
+          cd contracts
+          npx hardhat test test/PatriconZKGate.test.ts
+
+  constraint-count-report:
+    runs-on: ubuntu-latest
+    needs: compile-and-test-circuits
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install snarkjs globally
+        run: npm install -g snarkjs
+
+      - name: Download zk artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: zk-artifacts-${{ github.sha }}
+          path: .
+
+      - name: Generate constraint report table
+        id: report
+        run: |
+          set -euo pipefail
+
+          circuits=(agent_policy kyc_threshold jurisdiction_check)
+          rows=""
+
+          for name in "${circuits[@]}"; do
+            info="$(snarkjs r1cs info circuits/build/${name}/${name}.r1cs)"
+            constraints="$(echo "$info" | sed -n 's/.*# of Constraints: *//p' | head -n1 | xargs)"
+            wires="$(echo "$info" | sed -n 's/.*# of Wires: *//p' | head -n1 | xargs)"
+            labels="$(echo "$info" | sed -n 's/.*# of Labels: *//p' | head -n1 | xargs)"
+            rows+="| ${name} | ${constraints} | ${wires} | ${labels} |\n"
+          done
+
+          {
+            echo "table<<EOF"
+            echo "| Circuit | Constraints | Wires | Labels |"
+            echo "|---------|-------------|-------|--------|"
+            printf "%b" "$rows"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post PR constraint report comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const table = `${{ toJSON(steps.report.outputs.table) }}`;
+            const body = [
+              '## ZK Circuit Constraint Report',
+              '',
+              table
+            ].join('\n');
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });

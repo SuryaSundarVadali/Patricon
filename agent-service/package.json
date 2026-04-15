@@ -16,6 +16,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "circomlibjs": "^0.1.7",
     "dotenv": "^16.4.7",
     "ethers": "^6.13.4",
     "snarkjs": "^0.7.6",

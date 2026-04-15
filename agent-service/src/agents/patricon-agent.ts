@@ -1,13 +1,21 @@
-import type { Contract } from "ethers";
+import type { Contract, Signer } from "ethers";
 import type { PoolStateClient } from "../clients/pool-state-client.js";
 import { StructuredLogger } from "../logging/logger.js";
 import type { YieldFarmingStrategy } from "../strategies/yield-farming-strategy.js";
 import type { StrategyDecision } from "../strategies/yield-farming-strategy.js";
 import type { PolicyProofService } from "../zk/policy-proof-service.js";
+import type { AgentAction } from "../zk/ZKPolicyEnforcer.js";
+import type { ZKPolicyEnforcer } from "../zk/ZKPolicyEnforcer.js";
+import { ZKPolicyViolationError } from "../zk/errors.js";
 
 export type PatriconAgentConfig = {
   dryRun: boolean;
   signerAddress: string;
+  zkMinLimit: bigint;
+  zkMaxLimit: bigint;
+  zkRequiredTier: number;
+  zkJurisdiction: number;
+  zkTier: number;
 };
 
 /**
@@ -22,7 +30,9 @@ export class PatriconAgent {
     private readonly strategy: YieldFarmingStrategy,
     private readonly proofService: PolicyProofService,
     private readonly defiAdapter: Contract,
-    private readonly logger: StructuredLogger
+    private readonly logger: StructuredLogger,
+    private readonly zkPolicyEnforcer?: ZKPolicyEnforcer,
+    private readonly signer?: Signer
   ) {}
 
   async tick(): Promise<void> {
@@ -71,9 +81,31 @@ export class PatriconAgent {
         return;
       }
 
+      if (this.zkPolicyEnforcer && this.signer) {
+        const actionContext: AgentAction = {
+          tradeValue: decision.amount,
+          maxLimit: this.config.zkMaxLimit,
+          minLimit: this.config.zkMinLimit,
+          jurisdiction: this.config.zkJurisdiction,
+          kycTier: this.config.zkTier,
+          requiredTier: this.config.zkRequiredTier
+        };
+
+        await this.zkPolicyEnforcer.enforceAndExecute(this.config.signerAddress, actionContext, this.signer);
+      }
+
       await this.submitTransaction(decision, timestamp, currentNonce, proofs.identity, proofs.policy);
       this.tradeNonce += 1n;
     } catch (error) {
+      if (error instanceof ZKPolicyViolationError) {
+        this.logger.error("ZK policy violation detected, action skipped", {
+          action: decision.action,
+          proofName: error.proofName,
+          error: error.message
+        });
+        return;
+      }
+
       this.logger.error("Proof generation or transaction submission failed; action skipped", {
         action: decision.action,
         error: error instanceof Error ? error.message : String(error)

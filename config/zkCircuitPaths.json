@@ -1,0 +1,17 @@
+{
+  "agent_policy": {
+    "wasm": "circuits/build/agent_policy/agent_policy_js/agent_policy.wasm",
+    "zkey": "circuits/keys/agent_policy_0001.zkey",
+    "verificationKey": "circuits/keys/agent_policy_verification_key.json"
+  },
+  "kyc_threshold": {
+    "wasm": "circuits/build/kyc_threshold/kyc_threshold_js/kyc_threshold.wasm",
+    "zkey": "circuits/keys/kyc_threshold_0001.zkey",
+    "verificationKey": "circuits/keys/kyc_threshold_verification_key.json"
+  },
+  "jurisdiction_check": {
+    "wasm": "circuits/build/jurisdiction_check/jurisdiction_check_js/jurisdiction_check.wasm",
+    "zkey": "circuits/keys/jurisdiction_check_0001.zkey",
+    "verificationKey": "circuits/keys/jurisdiction_check_verification_key.json"
+  }
+}

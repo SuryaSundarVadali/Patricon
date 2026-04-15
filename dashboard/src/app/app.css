@@ -144,6 +144,89 @@
   flex-wrap: wrap;
 }
 
+.zk-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.zk-status-generating {
+  color: #9a6700;
+}
+
+.zk-status-verifying {
+  color: #155eef;
+}
+
+.zk-status-verified {
+  color: #067647;
+}
+
+.zk-status-failed {
+  color: #b42318;
+}
+
+.zk-spinner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid rgba(154, 103, 0, 0.2);
+  border-top-color: #9a6700;
+  border-radius: 50%;
+  animation: zk-spin 1s linear infinite;
+}
+
+.zk-pulse {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #155eef;
+  animation: zk-pulse 1.2s ease-in-out infinite;
+}
+
+.zk-skeleton-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.zk-skeleton-row {
+  height: 2rem;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef3f9 25%, #e5edf7 37%, #eef3f9 63%);
+  background-size: 400% 100%;
+  animation: zk-shimmer 1.2s ease infinite;
+}
+
+@keyframes zk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes zk-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes zk-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: 0 0;
+  }
+}
+
 @media (max-width: 768px) {
   .app-shell {
     padding-top: 1.25rem;

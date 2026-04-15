@@ -22,6 +22,7 @@ const EnvSchema = z.object({
   IDENTITY_VERIFIER_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000004"),
   POLICY_VERIFIER_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000005"),
   SETTLEMENT_CONNECTOR_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000006"),
+  ZK_GATE_ADDRESS: AddressSchema.default("0x0000000000000000000000000000000000000000"),
   SETTLEMENT_PAYEE_ADDRESS: AddressSchema.default("0x00000000000000000000000000000000000000AA"),
   SETTLEMENT_PAYER_ADDRESS: AddressSchema.optional(),
   SETTLEMENT_ASSET_ADDRESS: AddressSchema.default("0x00000000000000000000000000000000000000BB"),
@@ -36,6 +37,10 @@ const EnvSchema = z.object({
   WHITELISTED_TOKEN_IDS: z.string().default("11,42"),
 
   POLICY_MAX_TRADE: z.coerce.bigint().default(1_000n),
+  POLICY_MIN_TRADE: z.coerce.bigint().default(1n),
+  AGENT_REQUIRED_KYC_TIER: z.coerce.number().int().min(1).max(3).default(2),
+  AGENT_JURISDICTION_CODE: z.coerce.number().int().min(1).max(3).default(1),
+  AGENT_KYC_TIER: z.coerce.number().int().min(1).max(3).default(2),
   POLICY_DAILY_VOLUME_LIMIT: z.coerce.bigint().default(5_000n),
   POLICY_MIN_DELAY_SECONDS: z.coerce.bigint().default(300n),
 
@@ -95,6 +100,14 @@ export type PatriconConfig = {
     identityVerifier: string;
     policyVerifier: string;
     settlementConnector: string;
+    zkGate: string;
+  };
+  zkPolicy: {
+    minTrade: bigint;
+    maxTrade: bigint;
+    requiredKycTier: number;
+    jurisdictionCode: number;
+    agentKycTier: number;
   };
   settlement: {
     payee: string;
@@ -167,7 +180,15 @@ export const config: PatriconConfig = {
     agentRegistry: env.AGENT_REGISTRY_ADDRESS,
     identityVerifier: env.IDENTITY_VERIFIER_ADDRESS,
     policyVerifier: env.POLICY_VERIFIER_ADDRESS,
-    settlementConnector: env.SETTLEMENT_CONNECTOR_ADDRESS
+    settlementConnector: env.SETTLEMENT_CONNECTOR_ADDRESS,
+    zkGate: env.ZK_GATE_ADDRESS
+  },
+  zkPolicy: {
+    minTrade: env.POLICY_MIN_TRADE,
+    maxTrade: env.POLICY_MAX_TRADE,
+    requiredKycTier: env.AGENT_REQUIRED_KYC_TIER,
+    jurisdictionCode: env.AGENT_JURISDICTION_CODE,
+    agentKycTier: env.AGENT_KYC_TIER
   },
   settlement: {
     payee: env.SETTLEMENT_PAYEE_ADDRESS,

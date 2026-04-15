@@ -21,5 +21,11 @@
     "dev:dashboard": "pnpm --filter dashboard dev",
     "compile:contracts": "pnpm --filter contracts compile",
     "proof:build": "pnpm --filter circuits build"
+  },
+  "devDependencies": {
+    "circom_tester": "latest",
+    "circomlibjs": "latest",
+    "ffjavascript": "latest",
+    "snarkjs": "latest"
   }
 }
