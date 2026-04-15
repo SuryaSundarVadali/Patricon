@@ -1,7 +1,10 @@
 import { formatUnits } from "viem";
+import { useQuery } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
 import { useWriteContract } from "wagmi";
 
 import { IYieldPoolAbi } from "../../generated/contracts";
+import { getYieldHistory } from "../../lib/api/agentService";
 import { useContractResolution } from "./common";
 
 export type VaultActionInput = {
@@ -29,8 +32,23 @@ export function formatVaultAmount(value: bigint, decimals = 18): string {
 }
 
 export function useVault() {
+  const { address: account } = useAccount();
   const { address, disabledReason, missingDeployment } = useContractResolution("vault");
   const { writeContractAsync, ...writeState } = useWriteContract();
+
+  const yieldHistory = useQuery({
+    queryKey: ["agentService", "yieldHistory", account],
+    enabled: Boolean(account),
+    queryFn: async () => {
+      if (!account) {
+        throw new Error("Wallet is not connected.");
+      }
+      return getYieldHistory(account);
+    },
+    staleTime: 30_000
+  });
+
+  const latestPoint = yieldHistory.data?.[yieldHistory.data.length - 1];
 
   const ensureAddress = () => {
     const deployedAddress = address;
@@ -44,8 +62,9 @@ export function useVault() {
     address,
     missingDeployment,
     disabledReason,
-    getVaultState: undefined,
-    getUserShare: undefined,
+    getVaultState: latestPoint,
+    getUserShare: latestPoint?.deposited ?? 0,
+    yieldHistory,
     deposit: async (params: VaultActionInput) => {
       const deployedAddress = ensureAddress();
       return writeContractAsync({

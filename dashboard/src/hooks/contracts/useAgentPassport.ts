@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 
 import { AgentRegistryAbi } from "../../generated/contracts";
+import { measure } from "../../lib/profiling";
 import { toFixedLengthSignals } from "../../lib/zk/proofUtils";
 import { verifyZkIdProofLocally } from "../../lib/zk/zkIdProof";
 import type { ZkIdInput } from "../../lib/zk/zkTypes";
@@ -38,6 +39,7 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
     account,
     address,
     chainId,
+    wrongNetwork,
     disabledReason,
     missingDeployment
   } = useContractResolution("agentPassport");
@@ -116,6 +118,12 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
 
   const actions = useMemo(() => {
     const ensureAddress = () => {
+      if (!account) {
+        throw new Error("Wallet is not connected.");
+      }
+      if (wrongNetwork || missingDeployment) {
+        throw new Error("Wrong network for AgentPassport contract deployment.");
+      }
       const deployedAddress = address;
       if (!deployedAddress) {
         throw new Error(disabledReason ?? "Agent registry deployment missing.");
@@ -126,7 +134,7 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
     return {
       registerPassport: async (params: RegisterPassportInput) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
+        const { result } = await measure("contract.agentPassport.registerPassport", async () => writeContractAsync({
           address: deployedAddress,
           abi: AgentRegistryAbi,
           functionName: "selfRegisterAgent",
@@ -137,25 +145,28 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
             params.identityCommitment,
             params.identityVersion
           ]
-        });
+        }));
+        return result;
       },
       updatePolicyWithProof: async (identityRegistry: `0x${string}`, erc8004AgentId: bigint) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
+        const { result } = await measure("contract.agentPassport.linkIdentity", async () => writeContractAsync({
           address: deployedAddress,
           abi: AgentRegistryAbi,
           functionName: "linkERC8004Identity",
           args: [identityRegistry, erc8004AgentId]
-        });
+        }));
+        return result;
       },
       revokePassport: async (agent: `0x${string}`) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
+        const { result } = await measure("contract.agentPassport.revoke", async () => writeContractAsync({
           address: deployedAddress,
           abi: AgentRegistryAbi,
           functionName: "setAgentStatus",
           args: [agent, 3]
-        });
+        }));
+        return result;
       },
       verifyZkIdAndRegisterPassport: async (input: VerifyZkIdAndRegisterInput) => {
         const deployedAddress = ensureAddress();
@@ -169,8 +180,7 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
           throw new Error("Identity verifier deployment is missing for current chain.");
         }
 
-        const generated = await zkIdWorker.generate(input.zkInput);
-        const proofTimeMs = generated.elapsedMs;
+        const { result: generated, elapsedMs: proofTimeMs } = await measure("zk.flow.identity.worker", async () => zkIdWorker.generate(input.zkInput));
 
         const localVerified = await verifyZkIdProofLocally(generated.proof);
         if (!localVerified) {
@@ -198,7 +208,7 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
 
         const identityCommitment = toBytes32Hex(identitySignals[0]);
 
-        const txHash = await writeContractAsync({
+        const { result: txHash, elapsedMs: writeMs } = await measure("contract.agentPassport.writeWithProof", async () => writeContractAsync({
           address: deployedAddress,
           abi: AgentRegistryAbi,
           functionName: "selfRegisterAgent",
@@ -209,16 +219,16 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
             identityCommitment,
             input.registration.identityVersion
           ]
-        });
+        }));
 
         return {
           txHash,
           proofTimeMs,
-          verificationTimeMs
+          verificationTimeMs: verificationTimeMs + writeMs
         };
       }
     };
-  }, [address, chainId, disabledReason, publicClient, writeContractAsync, zkIdWorker]);
+  }, [account, address, chainId, disabledReason, missingDeployment, publicClient, writeContractAsync, wrongNetwork, zkIdWorker]);
 
   return {
     address,

@@ -1,4 +1,5 @@
 import { fullProveIdentity, toFixedLengthSignals, verifyGroth16 } from "./proofUtils";
+import { measure } from "../profiling";
 import { ZK_ID_CIRCUIT, loadVerificationKey } from "./zkConfig";
 import type {
   ContractProofBundle,
@@ -40,11 +41,11 @@ export async function generateZkIdProof(input: ZkIdInput): Promise<ContractProof
     return pending;
   }
 
-  const proofPromise = fullProveIdentity(
+  const proofPromise = measure("zk.identity.fullProve", async () => fullProveIdentity(
     input.identityWitness,
     ZK_ID_CIRCUIT.wasmUrl,
     ZK_ID_CIRCUIT.zkeyUrl
-  ).then((bundle) => {
+  )).then(({ result: bundle }) => {
     toFixedLengthSignals(bundle.publicSignals, ZK_ID_CIRCUIT.expectedPublicSignalLength, "identity public signals");
     return {
       ...bundle,
@@ -58,7 +59,8 @@ export async function generateZkIdProof(input: ZkIdInput): Promise<ContractProof
 
 export async function verifyZkIdProofLocally(bundle: ContractProofBundle<6>): Promise<boolean> {
   const verificationKey = await loadVerificationKey(ZK_ID_CIRCUIT.verificationKeyUrl);
-  return verifyGroth16(verificationKey, bundle);
+  const { result } = await measure("zk.identity.verifyLocal", async () => verifyGroth16(verificationKey, bundle));
+  return result;
 }
 
 export function clearZkIdProofCache(): void {

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  useAccount,
   useReadContract,
   useReadContracts,
   useWatchContractEvent,
@@ -8,6 +9,7 @@ import {
 } from "wagmi";
 
 import { ERC8004IdentityRegistryAbi } from "../../generated/contracts";
+import { measure } from "../../lib/profiling";
 import { addressEquals, useContractResolution } from "./common";
 
 export type OwnerLookupArgs = {
@@ -23,12 +25,31 @@ export function deriveAgentIdentity(tokenId: bigint, tokenURI: string) {
   };
 }
 
+export function buildRegisterAgentWriteCall(address: `0x${string}`, agentURI: string) {
+  return {
+    address,
+    abi: ERC8004IdentityRegistryAbi,
+    functionName: "register" as const,
+    args: [agentURI]
+  };
+}
+
+export function buildUpdateAgentUriWriteCall(address: `0x${string}`, agentId: bigint, newURI: string) {
+  return {
+    address,
+    abi: ERC8004IdentityRegistryAbi,
+    functionName: "setAgentURI" as const,
+    args: [agentId, newURI]
+  };
+}
+
 export function useErc8004Identity(tokenId?: bigint, ownerLookup?: OwnerLookupArgs) {
   const queryClient = useQueryClient();
+  const { address: accountAddress } = useAccount();
   const {
-    account,
     address,
     chainId,
+    wrongNetwork,
     disabledReason,
     missingDeployment
   } = useContractResolution("erc8004IdentityRegistry");
@@ -36,7 +57,7 @@ export function useErc8004Identity(tokenId?: bigint, ownerLookup?: OwnerLookupAr
 
   const pageSize = ownerLookup?.pageSize ?? 20;
   const startId = ownerLookup?.startId ?? 1n;
-  const lookupOwner = ownerLookup?.owner ?? account;
+  const lookupOwner = ownerLookup?.owner ?? accountAddress;
 
   const totalAgents = useReadContract({
     abi: ERC8004IdentityRegistryAbi,
@@ -121,6 +142,12 @@ export function useErc8004Identity(tokenId?: bigint, ownerLookup?: OwnerLookupAr
 
   const actions = useMemo(() => {
     const ensureAddress = () => {
+      if (!accountAddress) {
+        throw new Error("Wallet is not connected.");
+      }
+      if (wrongNetwork || missingDeployment) {
+        throw new Error("Wrong network for ERC-8004 identity contract deployment.");
+      }
       const deployedAddress = address;
       if (!deployedAddress) {
         throw new Error(disabledReason ?? "ERC-8004 identity registry deployment missing.");
@@ -131,24 +158,16 @@ export function useErc8004Identity(tokenId?: bigint, ownerLookup?: OwnerLookupAr
     return {
       registerAgent: async (agentURI: string) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
-          address: deployedAddress,
-          abi: ERC8004IdentityRegistryAbi,
-          functionName: "register",
-          args: [agentURI]
-        });
+        const { result } = await measure("erc8004.identity.register", async () => writeContractAsync(buildRegisterAgentWriteCall(deployedAddress, agentURI)));
+        return result;
       },
       updateAgentURI: async (agentId: bigint, newURI: string) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
-          address: deployedAddress,
-          abi: ERC8004IdentityRegistryAbi,
-          functionName: "setAgentURI",
-          args: [agentId, newURI]
-        });
+        const { result } = await measure("erc8004.identity.updateUri", async () => writeContractAsync(buildUpdateAgentUriWriteCall(deployedAddress, agentId, newURI)));
+        return result;
       }
     };
-  }, [address, disabledReason, writeContractAsync]);
+  }, [accountAddress, address, disabledReason, missingDeployment, writeContractAsync, wrongNetwork]);
 
   return {
     address,

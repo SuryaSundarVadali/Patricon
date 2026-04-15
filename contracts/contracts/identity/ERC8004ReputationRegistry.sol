@@ -15,6 +15,7 @@ contract ERC8004ReputationRegistry {
     error InvalidValueDecimals();
     error AgentNotRegistered(uint256 agentId);
     error FeedbackNotFound();
+    error SummaryOutOfRange();
 
     struct FeedbackRecord {
         int128 value;
@@ -34,7 +35,7 @@ contract ERC8004ReputationRegistry {
         bytes32 feedbackHash;
     }
 
-    address private immutable _identityRegistry;
+    address private immutable _IDENTITY_REGISTRY;
 
     mapping(uint256 => mapping(address => mapping(uint64 => FeedbackRecord))) private _feedback;
     mapping(uint256 => mapping(address => uint64)) private _lastIndex;
@@ -68,11 +69,11 @@ contract ERC8004ReputationRegistry {
     );
 
     constructor(address identityRegistry_) {
-        _identityRegistry = identityRegistry_;
+        _IDENTITY_REGISTRY = identityRegistry_;
     }
 
     function getIdentityRegistry() external view returns (address) {
-        return _identityRegistry;
+        return _IDENTITY_REGISTRY;
     }
 
     function giveFeedback(
@@ -183,6 +184,9 @@ contract ERC8004ReputationRegistry {
             }
         }
 
+        if (sum < type(int128).min || sum > type(int128).max) revert SummaryOutOfRange();
+        // casting to 'int128' is safe because sum is explicitly bounded to int128 range above
+        // forge-lint: disable-next-line(unsafe-typecast)
         summaryValue = int128(sum);
     }
 
@@ -279,7 +283,7 @@ contract ERC8004ReputationRegistry {
     }
 
     function _requireAgentOwner(uint256 agentId) internal view returns (address owner_) {
-        try IERC8004IdentityRead(_identityRegistry).ownerOf(agentId) returns (address ownerOfToken) {
+        try IERC8004IdentityRead(_IDENTITY_REGISTRY).ownerOf(agentId) returns (address ownerOfToken) {
             return ownerOfToken;
         } catch {
             revert AgentNotRegistered(agentId);
@@ -288,8 +292,8 @@ contract ERC8004ReputationRegistry {
 
     function _isOwnerOrOperator(uint256 agentId, address owner_, address caller) internal view returns (bool) {
         if (caller == owner_) return true;
-        if (IERC8004IdentityRead(_identityRegistry).getApproved(agentId) == caller) return true;
-        return IERC8004IdentityRead(_identityRegistry).isApprovedForAll(owner_, caller);
+        if (IERC8004IdentityRead(_IDENTITY_REGISTRY).getApproved(agentId) == caller) return true;
+        return IERC8004IdentityRead(_IDENTITY_REGISTRY).isApprovedForAll(owner_, caller);
     }
 
     function _resolveClients(uint256 agentId, address[] calldata clientAddresses)

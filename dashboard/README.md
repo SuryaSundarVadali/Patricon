@@ -43,3 +43,7 @@ It never stores or requests raw private keys.
 - Connection options include MetaMask, Rabby/Phantom EVM via injected providers, WalletConnect-compatible wallets, and Safe smart accounts where available.
 - All writes initiated from the UI are signed by the connected wallet.
 - Private-key based signing is out of scope for production usage.
+
+## Architecture docs
+
+- Frontend architecture and hardening notes: `docs/frontend-architecture.md`

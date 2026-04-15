@@ -1,6 +1,8 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  useAccount,
   useReadContract,
   useReadContracts,
   useWatchContractEvent,
@@ -11,6 +13,7 @@ import {
   PolicyEnforcedDeFiAdapterAbi,
   type Groth16Proof
 } from "../../generated/contracts";
+import { getAgentState, getGlobalStats } from "../../lib/api/agentService";
 import { useContractResolution } from "./common";
 
 type ProofSignals = {
@@ -30,8 +33,27 @@ export type AdapterActionInput = {
 
 export function usePatriconCore() {
   const queryClient = useQueryClient();
+  const { address: account } = useAccount();
   const { address, chainId, disabledReason, missingDeployment } = useContractResolution("patriconCore");
   const { writeContractAsync, ...writeState } = useWriteContract();
+
+  const globalStats = useQuery({
+    queryKey: ["agentService", "globalStats"],
+    queryFn: getGlobalStats,
+    staleTime: 20_000
+  });
+
+  const accountState = useQuery({
+    queryKey: ["agentService", "state", account],
+    enabled: Boolean(account),
+    queryFn: async () => {
+      if (!account) {
+        throw new Error("Wallet not connected.");
+      }
+      return getAgentState(account);
+    },
+    staleTime: 15_000
+  });
 
   const readEnabled = Boolean(address);
 
@@ -209,9 +231,9 @@ export function usePatriconCore() {
     reads,
     paused,
     permissionlessExecution,
-    getGlobalTVL: undefined,
-    getUserPositions: undefined,
-    getPendingRewards: undefined,
+    getGlobalTVL: globalStats.data?.tvlUsd,
+    getUserPositions: accountState.data?.pendingActions ?? [],
+    getPendingRewards: accountState.data?.history.filter((row) => row.type === "DEPOSIT").length ?? 0,
     ...actions,
     writeState
   };

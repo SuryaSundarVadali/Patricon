@@ -1,4 +1,5 @@
 import { fullProvePolicy, toFixedLengthSignals, verifyGroth16 } from "./proofUtils";
+import { measure } from "../profiling";
 import { POLICY_CIRCUIT, loadVerificationKey } from "./zkConfig";
 import type { ContractProofBundle, PolicyProofInput } from "./zkTypes";
 
@@ -15,11 +16,11 @@ export async function generatePolicyProof(input: PolicyProofInput): Promise<Cont
     return pending;
   }
 
-  const proofPromise = fullProvePolicy(
+  const proofPromise = measure("zk.policy.fullProve", async () => fullProvePolicy(
     input.policyWitness,
     POLICY_CIRCUIT.wasmUrl,
     POLICY_CIRCUIT.zkeyUrl
-  ).then((bundle) => {
+  )).then(({ result: bundle }) => {
     toFixedLengthSignals(bundle.publicSignals, POLICY_CIRCUIT.expectedPublicSignalLength, "policy public signals");
     return {
       ...bundle,
@@ -33,7 +34,8 @@ export async function generatePolicyProof(input: PolicyProofInput): Promise<Cont
 
 export async function verifyPolicyProofLocally(bundle: ContractProofBundle<14>): Promise<boolean> {
   const verificationKey = await loadVerificationKey(POLICY_CIRCUIT.verificationKeyUrl);
-  return verifyGroth16(verificationKey, bundle);
+  const { result } = await measure("zk.policy.verifyLocal", async () => verifyGroth16(verificationKey, bundle));
+  return result;
 }
 
 export function clearPolicyProofCache(): void {

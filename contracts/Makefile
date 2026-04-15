@@ -1,4 +1,5 @@
 -include .env
+-include ../.env
 
 .PHONY: all test clean deploy deployDryRun deployLocal deployHashkey deploy-erc8004 grantAgentRegistrarRole grantPolicyAdminRole fund help install snapshot format anvil scopefile flatten encryptKey
 
@@ -56,20 +57,23 @@ snapshot :; forge snapshot
 # /*//////////////////////////////////////////////////////////////
 #                          EVM - SCRIPTS
 # //////////////////////////////////////////////////////////////*/
-deployDryRun :; forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url $(RPC_URL) -vvvv
+deployDryRun :; @test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)
+	forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url $(RPC_URL) -vvvv
 
 deploy :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
+	@test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)
 	forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url $(RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
 
 deployLocal :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 	forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url http://127.0.0.1:8545 --account $(ACCOUNT) --broadcast -vvvv
 
 deployHashkey :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
+	@test -n "$(HASHKEY_TESTNET_RPC_URL)" || (echo "HASHKEY_TESTNET_RPC_URL is required" && exit 1)
 	forge script $(PATRI_CON_DEPLOY_SCRIPT) --sig "run(address)" $(TARGET_POOL_ADDRESS) --rpc-url $(HASHKEY_TESTNET_RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
 
 deploy-erc8004 :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 	@test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)
-	forge script $(PATRI_CON_ERC8004_DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
+	forge script $(PATRI_CON_ERC8004_DEPLOY_SCRIPT) --sig "run()" --rpc-url $(RPC_URL) --account $(ACCOUNT) --broadcast -vvvv
 
 grantAgentRegistrarRole :; @test -n "$(ACCOUNT)" || (echo "ACCOUNT is required" && exit 1)
 	@test -n "$(RPC_URL)" || (echo "RPC_URL is required" && exit 1)

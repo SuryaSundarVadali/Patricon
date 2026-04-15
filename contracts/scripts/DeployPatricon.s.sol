@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Script} from "forge-std/Script.sol";
 import {AgentRegistry} from "../contracts/identity/AgentRegistry.sol";
 import {PolicyRegistry} from "../contracts/policy/PolicyRegistry.sol";
 import {VerifierIdentity} from "../contracts/verifier/PatriconIdentityVerifier.sol";
@@ -9,17 +10,11 @@ import {MockYieldPool} from "../contracts/adapters/MockYieldPool.sol";
 import {PolicyEnforcedDeFiAdapter} from "../contracts/adapters/PolicyEnforcedDeFiAdapter.sol";
 import {SettlementConnector} from "../contracts/adapters/SettlementConnector.sol";
 
-interface Vm {
-    function startBroadcast() external;
-    function stopBroadcast() external;
-}
-
 /// @title DeployPatricon
 /// @notice Foundry deployment script for the Patricon contract stack.
 /// @dev run(address targetPoolOverride) deploys a full stack and returns all deployed addresses.
 ///      If targetPoolOverride is zero address, a MockYieldPool is deployed and used.
-contract DeployPatricon {
-    Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+contract DeployPatricon is Script {
 
     event ContractsDeployed(
         address identityVerifier,
@@ -75,7 +70,7 @@ contract DeployPatricon {
             address settlementConnector
         )
     {
-        VM.startBroadcast();
+        vm.startBroadcast();
 
         identityVerifier = address(new VerifierIdentity());
         policyVerifier = address(new VerifierPolicy());
@@ -94,7 +89,7 @@ contract DeployPatricon {
 
         settlementConnector = address(new SettlementConnector(policyRegistry, policyVerifier));
 
-        VM.stopBroadcast();
+        vm.stopBroadcast();
 
         emit ContractsDeployed(
             identityVerifier,

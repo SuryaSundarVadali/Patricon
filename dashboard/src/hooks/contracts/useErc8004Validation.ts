@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  useAccount,
   useReadContract,
   useWatchContractEvent,
   useWriteContract
 } from "wagmi";
 
 import { ERC8004ValidationRegistryAbi } from "../../generated/contracts";
+import { measure } from "../../lib/profiling";
 import { useContractResolution } from "./common";
 
 export type ValidationRequestInput = {
@@ -24,12 +26,31 @@ export type ValidationResponseInput = {
   tag: string;
 };
 
+export function buildRecordValidationWriteCall(address: `0x${string}`, params: ValidationRequestInput) {
+  return {
+    address,
+    abi: ERC8004ValidationRegistryAbi,
+    functionName: "validationRequest" as const,
+    args: [params.validatorAddress, params.agentId, params.proofURI, params.proofHash]
+  };
+}
+
+export function buildValidationResponseWriteCall(address: `0x${string}`, params: ValidationResponseInput) {
+  return {
+    address,
+    abi: ERC8004ValidationRegistryAbi,
+    functionName: "validationResponse" as const,
+    args: [params.requestHash, params.result, params.responseURI, params.responseHash, params.tag]
+  };
+}
+
 export function useErc8004Validation(agentId?: bigint, requestHash?: `0x${string}`) {
   const queryClient = useQueryClient();
+  const { address: accountAddress } = useAccount();
   const {
-    account,
     address,
     chainId,
+    wrongNetwork,
     disabledReason,
     missingDeployment
   } = useContractResolution("erc8004ValidationRegistry");
@@ -69,9 +90,9 @@ export function useErc8004Validation(agentId?: bigint, requestHash?: `0x${string
     abi: ERC8004ValidationRegistryAbi,
     address,
     functionName: "getValidatorRequests",
-    args: account ? [account] : undefined,
+    args: accountAddress ? [accountAddress] : undefined,
     query: {
-      enabled: Boolean(address && account)
+      enabled: Boolean(address && accountAddress)
     }
   });
 
@@ -97,6 +118,12 @@ export function useErc8004Validation(agentId?: bigint, requestHash?: `0x${string
 
   const actions = useMemo(() => {
     const ensureAddress = () => {
+      if (!accountAddress) {
+        throw new Error("Wallet is not connected.");
+      }
+      if (wrongNetwork || missingDeployment) {
+        throw new Error("Wrong network for ERC-8004 validation contract deployment.");
+      }
       const deployedAddress = address;
       if (!deployedAddress) {
         throw new Error(disabledReason ?? "ERC-8004 validation registry deployment missing.");
@@ -107,35 +134,22 @@ export function useErc8004Validation(agentId?: bigint, requestHash?: `0x${string
     return {
       recordValidation: async (params: ValidationRequestInput) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
-          address: deployedAddress,
-          abi: ERC8004ValidationRegistryAbi,
-          functionName: "validationRequest",
-          args: [params.validatorAddress, params.agentId, params.proofURI, params.proofHash]
-        });
+        const { result } = await measure("erc8004.validation.record", async () => writeContractAsync(buildRecordValidationWriteCall(deployedAddress, params)));
+        return result;
       },
       submitValidationResponse: async (params: ValidationResponseInput) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
-          address: deployedAddress,
-          abi: ERC8004ValidationRegistryAbi,
-          functionName: "validationResponse",
-          args: [
-            params.requestHash,
-            params.result,
-            params.responseURI,
-            params.responseHash,
-            params.tag
-          ]
-        });
+        const { result } = await measure("erc8004.validation.respond", async () => writeContractAsync(buildValidationResponseWriteCall(deployedAddress, params)));
+        return result;
       }
     };
-  }, [address, disabledReason, writeContractAsync]);
+  }, [accountAddress, address, disabledReason, missingDeployment, writeContractAsync, wrongNetwork]);
 
   return {
     address,
     missingDeployment,
     disabledReason,
+    agentValidations: validations,
     getValidation: validation,
     getLatestValidation: {
       hash: latestValidationHash,

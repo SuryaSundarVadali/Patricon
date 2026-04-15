@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 
 import { PolicyRegistryAbi } from "../../generated/contracts";
+import { measure } from "../../lib/profiling";
 import { toFixedLengthSignals } from "../../lib/zk/proofUtils";
 import { verifyPolicyProofLocally } from "../../lib/zk/policyProof";
 import type { PolicyProofInput } from "../../lib/zk/zkTypes";
@@ -47,6 +48,7 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
     account,
     address,
     chainId,
+    wrongNetwork,
     disabledReason,
     missingDeployment
   } = useContractResolution("zkPolicyRegistry");
@@ -107,6 +109,12 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
 
   const actions = useMemo(() => {
     const ensureAddress = () => {
+      if (!account) {
+        throw new Error("Wallet is not connected.");
+      }
+      if (wrongNetwork || missingDeployment) {
+        throw new Error("Wrong network for PolicyRegistry contract deployment.");
+      }
       const deployedAddress = address;
       if (!deployedAddress) {
         throw new Error(disabledReason ?? "Policy registry deployment missing.");
@@ -117,7 +125,7 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
     return {
       registerPolicy: async (params: RegisterPolicyInput) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
+        const { result } = await measure("contract.policyRegistry.register", async () => writeContractAsync({
           address: deployedAddress,
           abi: PolicyRegistryAbi,
           functionName: "registerOrUpdatePolicy",
@@ -128,16 +136,18 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
             params.circuitVersion,
             params.active
           ]
-        });
+        }));
+        return result;
       },
       attachPolicyToAgent: async (policyHashValue: `0x${string}`, policyVersion: bigint, circuitVersion: bigint) => {
         const deployedAddress = ensureAddress();
-        return writeContractAsync({
+        const { result } = await measure("contract.policyRegistry.attach", async () => writeContractAsync({
           address: deployedAddress,
           abi: PolicyRegistryAbi,
           functionName: "selfRegisterPolicy",
           args: [policyHashValue, policyVersion, circuitVersion]
-        });
+        }));
+        return result;
       },
       verifyPolicyProofAndAttach: async (params: VerifyPolicyAndAttachInput) => {
         const deployedAddress = ensureAddress();
@@ -151,8 +161,7 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
           throw new Error("Policy verifier deployment is missing for current chain.");
         }
 
-        const generated = await policyWorker.generate(params.proofInput);
-        const proofTimeMs = generated.elapsedMs;
+        const { result: generated, elapsedMs: proofTimeMs } = await measure("zk.flow.policy.worker", async () => policyWorker.generate(params.proofInput));
 
         const localVerified = await verifyPolicyProofLocally(generated.proof);
         if (!localVerified) {
@@ -194,17 +203,17 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
         }
 
         const policyHashValue = toBytes32Hex(policySignals[2]);
-        const txHash = await writeContractAsync({
+        const { result: txHash, elapsedMs: writeMs } = await measure("contract.policyRegistry.writeWithProof", async () => writeContractAsync({
           address: deployedAddress,
           abi: PolicyRegistryAbi,
           functionName: "selfRegisterPolicy",
           args: [policyHashValue, params.policyVersion, params.circuitVersion]
-        });
+        }));
 
         return {
           txHash,
           proofTimeMs,
-          verificationTimeMs
+          verificationTimeMs: verificationTimeMs + writeMs
         };
       },
       verifyPolicyProofAndRegister: async (params: VerifyPolicyAndRegisterInput) => {
@@ -219,8 +228,7 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
           throw new Error("Policy verifier deployment is missing for current chain.");
         }
 
-        const generated = await policyWorker.generate(params.proofInput);
-        const proofTimeMs = generated.elapsedMs;
+        const { result: generated, elapsedMs: proofTimeMs } = await measure("zk.flow.policy.worker", async () => policyWorker.generate(params.proofInput));
 
         const localVerified = await verifyPolicyProofLocally(generated.proof);
         if (!localVerified) {
@@ -262,21 +270,21 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
         }
 
         const policyHashValue = toBytes32Hex(policySignals[2]);
-        const txHash = await writeContractAsync({
+        const { result: txHash, elapsedMs: writeMs } = await measure("contract.policyRegistry.writeWithProof", async () => writeContractAsync({
           address: deployedAddress,
           abi: PolicyRegistryAbi,
           functionName: "registerOrUpdatePolicy",
           args: [params.agent, policyHashValue, params.policyVersion, params.circuitVersion, params.active]
-        });
+        }));
 
         return {
           txHash,
           proofTimeMs,
-          verificationTimeMs
+          verificationTimeMs: verificationTimeMs + writeMs
         };
       }
     };
-  }, [address, chainId, disabledReason, policyWorker, publicClient, writeContractAsync]);
+  }, [account, address, chainId, disabledReason, missingDeployment, policyWorker, publicClient, writeContractAsync, wrongNetwork]);
 
   return {
     address,

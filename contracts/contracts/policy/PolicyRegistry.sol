@@ -36,7 +36,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     address public owner;
     bool public paused;
-    IAgentRegistry public immutable agentRegistryRef;
+    IAgentRegistry public immutable AGENT_REGISTRY_REF;
 
     bytes32 private constant DEFAULT_ADMIN_ROLE = 0x00;
     mapping(bytes32 => mapping(address => bool)) private _roles;
@@ -73,7 +73,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (agentRegistry_ == address(0)) revert InvalidAgent();
 
         owner = msg.sender;
-        agentRegistryRef = IAgentRegistry(agentRegistry_);
+        AGENT_REGISTRY_REF = IAgentRegistry(agentRegistry_);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(POLICY_ADMIN_ROLE, msg.sender);
         _grantRole(EMERGENCY_ADMIN_ROLE, msg.sender);
@@ -95,7 +95,7 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function _ensureActiveAgent(address agent) internal view {
-        (,,, bool active) = agentRegistryRef.getAgentBinding(agent);
+        (,,, bool active) = AGENT_REGISTRY_REF.getAgentBinding(agent);
         if (!active) revert AgentNotActive();
     }
 

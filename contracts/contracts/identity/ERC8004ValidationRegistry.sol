@@ -13,6 +13,7 @@ contract ERC8004ValidationRegistry {
     error AgentNotRegistered(uint256 agentId);
     error NotValidatorForRequest();
     error InvalidResponse();
+    error AverageOutOfRange();
 
     struct ValidationRecord {
         address validatorAddress;
@@ -23,7 +24,7 @@ contract ERC8004ValidationRegistry {
         uint256 lastUpdate;
     }
 
-    address private immutable _identityRegistry;
+    address private immutable _IDENTITY_REGISTRY;
 
     mapping(bytes32 => ValidationRecord) private _validations;
     mapping(uint256 => bytes32[]) private _agentValidations;
@@ -44,11 +45,11 @@ contract ERC8004ValidationRegistry {
     );
 
     constructor(address identityRegistry_) {
-        _identityRegistry = identityRegistry_;
+        _IDENTITY_REGISTRY = identityRegistry_;
     }
 
     function getIdentityRegistry() external view returns (address) {
-        return _identityRegistry;
+        return _IDENTITY_REGISTRY;
     }
 
     function validationRequest(
@@ -150,7 +151,11 @@ contract ERC8004ValidationRegistry {
             return (0, 0);
         }
 
-        averageResponse = uint8(sum / count);
+        uint256 avg = sum / count;
+        if (avg > type(uint8).max) revert AverageOutOfRange();
+        // casting to 'uint8' is safe because avg is explicitly bounded above by uint8.max
+        // forge-lint: disable-next-line(unsafe-typecast)
+        averageResponse = uint8(avg);
     }
 
     function getAgentValidations(uint256 agentId) external view returns (bytes32[] memory requestHashes) {
@@ -162,7 +167,7 @@ contract ERC8004ValidationRegistry {
     }
 
     function _requireAgentOwner(uint256 agentId) internal view returns (address owner_) {
-        try IERC8004IdentityValidationRead(_identityRegistry).ownerOf(agentId) returns (address ownerOfToken) {
+        try IERC8004IdentityValidationRead(_IDENTITY_REGISTRY).ownerOf(agentId) returns (address ownerOfToken) {
             return ownerOfToken;
         } catch {
             revert AgentNotRegistered(agentId);
@@ -171,8 +176,8 @@ contract ERC8004ValidationRegistry {
 
     function _isOwnerOrOperator(uint256 agentId, address owner_, address caller) internal view returns (bool) {
         if (caller == owner_) return true;
-        if (IERC8004IdentityValidationRead(_identityRegistry).getApproved(agentId) == caller) return true;
-        return IERC8004IdentityValidationRead(_identityRegistry).isApprovedForAll(owner_, caller);
+        if (IERC8004IdentityValidationRead(_IDENTITY_REGISTRY).getApproved(agentId) == caller) return true;
+        return IERC8004IdentityValidationRead(_IDENTITY_REGISTRY).isApprovedForAll(owner_, caller);
     }
 
     function _matchValidator(address validator, address[] calldata validators) internal pure returns (bool) {

@@ -1,0 +1,151 @@
+.app-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.app-header p {
+  margin-top: 0.5rem;
+  color: #5f6f85;
+}
+
+.app-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.app-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.app-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.app-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.app-label {
+  font-size: 0.85rem;
+  color: #6d7f97;
+  margin: 0;
+}
+
+.app-value {
+  margin: 0.25rem 0;
+  font-size: 1.5rem;
+  color: #0f1f33;
+}
+
+.app-hint {
+  margin: 0;
+  color: #607089;
+  font-size: 0.9rem;
+}
+
+.app-btn {
+  border: 1px solid #ced9ea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #13243a;
+  font-weight: 600;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+}
+
+.app-btn-primary {
+  background: linear-gradient(90deg, #0b6075, #0a8b84);
+  color: #f5fffd;
+  border: 0;
+}
+
+.app-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-nav-tiles a {
+  display: block;
+  padding: 1rem;
+  border: 1px solid #d9e6f0;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #16314d;
+  background: linear-gradient(180deg, #fbfdff, #f5f9ff);
+}
+
+.app-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.app-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: #324a67;
+  font-size: 0.92rem;
+}
+
+.app-form input,
+.app-form select,
+.app-form textarea {
+  border: 1px solid #ccd9e6;
+  border-radius: 8px;
+  padding: 0.55rem;
+  font: inherit;
+}
+
+.app-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.app-table th,
+.app-table td {
+  text-align: left;
+  border-bottom: 1px solid #e2eaf2;
+  padding: 0.6rem;
+  font-size: 0.92rem;
+}
+
+.app-toast {
+  border-radius: 10px;
+  border: 1px solid #d4deea;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.app-toast-pending {
+  background: #fff8e6;
+}
+
+.app-toast-confirmed {
+  background: #effcf2;
+}
+
+.app-toast-failed {
+  background: #fff1f0;
+}
+
+.app-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding-top: 1.25rem;
+  }
+}

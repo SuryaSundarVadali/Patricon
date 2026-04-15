@@ -46,6 +46,8 @@ export type ChainDeployment = {
   identityRegistry?: string;
   reputationRegistry?: string;
   validationRegistry?: string;
+  erc8004PolicyRegistry?: string;
+  erc8004AgentRegistry?: string;
 };
 
 export type ContractKey =
@@ -192,4 +194,30 @@ export function requireContractAddress(chainId: number, key: ContractKey): Addre
 
 export function normalizeAddress(address: string): string {
   return address.toLowerCase();
+}
+
+export function getTrustedValidators(): Address[] {
+  const raw = (import.meta.env.VITE_TRUSTED_VALIDATORS as string | undefined) ?? "";
+  if (!raw.trim()) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((item) => item as Address);
+}
+
+export function isTrustedValidator(address: string | undefined): boolean {
+  if (!address) {
+    return false;
+  }
+
+  const validators = getTrustedValidators();
+  if (validators.length === 0) {
+    return false;
+  }
+
+  return validators.some((validator) => normalizeAddress(validator) === normalizeAddress(address));
 }

@@ -42,7 +42,7 @@ export function useContractResolution(key: ContractKey): ContractResolution {
     address: resolvedAddress,
     isConnected,
     account: address,
-    wrongNetwork: chainId !== hashkeyTestnet.id,
+    wrongNetwork: isConnected && missingDeployment,
     missingDeployment,
     disabledReason,
     switchToHashkeyTestnet: async () => {

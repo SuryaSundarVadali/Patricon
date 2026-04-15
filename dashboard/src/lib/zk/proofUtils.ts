@@ -18,6 +18,12 @@ type SnarkjsFullProveResult = {
   publicSignals: string[];
 };
 
+type HexWord = `0x${string}`;
+
+function toHexWord(value: bigint): HexWord {
+  return `0x${value.toString(16).padStart(64, "0")}`;
+}
+
 function normalizeBigintArray(values: readonly bigint[]): string[] {
   return values.map((value) => value.toString());
 }
@@ -46,6 +52,23 @@ export function toContractGroth16Proof(snarkProof: SnarkjsProof): Groth16Contrac
       [BigInt(snarkProof.pi_b[1][1]), BigInt(snarkProof.pi_b[1][0])]
     ],
     pC: [BigInt(snarkProof.pi_c[0]), BigInt(snarkProof.pi_c[1])]
+  };
+}
+
+export function formatGroth16ProofForContract(bundle: ContractProofBundle<number>): {
+  pA: [HexWord, HexWord];
+  pB: [[HexWord, HexWord], [HexWord, HexWord]];
+  pC: [HexWord, HexWord];
+  publicInputs: HexWord[];
+} {
+  return {
+    pA: [toHexWord(bundle.proof.pA[0]), toHexWord(bundle.proof.pA[1])],
+    pB: [
+      [toHexWord(bundle.proof.pB[0][0]), toHexWord(bundle.proof.pB[0][1])],
+      [toHexWord(bundle.proof.pB[1][0]), toHexWord(bundle.proof.pB[1][1])]
+    ],
+    pC: [toHexWord(bundle.proof.pC[0]), toHexWord(bundle.proof.pC[1])],
+    publicInputs: bundle.publicSignals.map(toHexWord)
   };
 }
 
