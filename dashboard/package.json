@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "wagmi:generate": "wagmi generate --config ./wagmi.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.20",
@@ -21,6 +22,8 @@
     "wagmi": "^2.13.4"
   },
   "devDependencies": {
+    "@wagmi/cli": "^2.3.0",
+    "@wagmi/cli/plugins": "^2.3.0",
     "@types/react": "^18.3.15",
     "@types/react-dom": "^18.3.3",
     "@vitejs/plugin-react": "^4.3.4",
