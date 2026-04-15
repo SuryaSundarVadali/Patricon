@@ -1,12 +1,18 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  usePublicClient,
   useReadContract,
   useWatchContractEvent,
   useWriteContract
 } from "wagmi";
 
 import { AgentRegistryAbi } from "../../generated/contracts";
+import { toFixedLengthSignals } from "../../lib/zk/proofUtils";
+import { verifyZkIdProofLocally } from "../../lib/zk/zkIdProof";
+import type { ZkIdInput } from "../../lib/zk/zkTypes";
+import { getContractAddress, VerifierIdentityAbi } from "../../lib/contracts";
+import { useZkIdProofWorker } from "../useZkIdProofWorker";
 import { useContractResolution } from "./common";
 
 export type RegisterPassportInput = {
@@ -17,6 +23,15 @@ export type RegisterPassportInput = {
   identityVersion: bigint;
 };
 
+type VerifyZkIdAndRegisterInput = {
+  zkInput: ZkIdInput;
+  registration: Omit<RegisterPassportInput, "identityCommitment">;
+};
+
+function toBytes32Hex(value: bigint): `0x${string}` {
+  return `0x${value.toString(16).padStart(64, "0")}`;
+}
+
 export function useAgentPassport(agentAddress?: `0x${string}`) {
   const queryClient = useQueryClient();
   const {
@@ -26,6 +41,8 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
     disabledReason,
     missingDeployment
   } = useContractResolution("agentPassport");
+  const publicClient = usePublicClient({ chainId });
+  const zkIdWorker = useZkIdProofWorker();
   const { writeContractAsync, ...writeState } = useWriteContract();
 
   const targetAgent = agentAddress ?? account;
@@ -139,9 +156,69 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
           functionName: "setAgentStatus",
           args: [agent, 3]
         });
+      },
+      verifyZkIdAndRegisterPassport: async (input: VerifyZkIdAndRegisterInput) => {
+        const deployedAddress = ensureAddress();
+
+        if (!publicClient) {
+          throw new Error("Public client is unavailable for current chain.");
+        }
+
+        const verifierAddress = getContractAddress(chainId, "identityVerifier");
+        if (!verifierAddress) {
+          throw new Error("Identity verifier deployment is missing for current chain.");
+        }
+
+        const generated = await zkIdWorker.generate(input.zkInput);
+        const proofTimeMs = generated.elapsedMs;
+
+        const localVerified = await verifyZkIdProofLocally(generated.proof);
+        if (!localVerified) {
+          throw new Error("Identity proof did not pass local Groth16 verification.");
+        }
+
+        const identitySignals = toFixedLengthSignals(
+          generated.proof.publicSignals,
+          6,
+          "identity public signals"
+        ) as [bigint, bigint, bigint, bigint, bigint, bigint];
+
+        const verificationStartedAt = performance.now();
+        const verifiedOnChain = await publicClient.readContract({
+          address: verifierAddress,
+          abi: VerifierIdentityAbi,
+          functionName: "verifyProof",
+          args: [generated.proof.proof.pA, generated.proof.proof.pB, generated.proof.proof.pC, identitySignals]
+        });
+        const verificationTimeMs = performance.now() - verificationStartedAt;
+
+        if (!verifiedOnChain) {
+          throw new Error("Identity proof failed contract verifier precheck.");
+        }
+
+        const identityCommitment = toBytes32Hex(identitySignals[0]);
+
+        const txHash = await writeContractAsync({
+          address: deployedAddress,
+          abi: AgentRegistryAbi,
+          functionName: "selfRegisterAgent",
+          args: [
+            input.registration.agentType,
+            input.registration.didHash,
+            input.registration.publicKeyHash,
+            identityCommitment,
+            input.registration.identityVersion
+          ]
+        });
+
+        return {
+          txHash,
+          proofTimeMs,
+          verificationTimeMs
+        };
       }
     };
-  }, [address, disabledReason, writeContractAsync]);
+  }, [address, chainId, disabledReason, publicClient, writeContractAsync, zkIdWorker]);
 
   return {
     address,
@@ -151,6 +228,7 @@ export function useAgentPassport(agentAddress?: `0x${string}`) {
     getPolicyHash: policyHash,
     linkedIdentityRegistry,
     identityMerkleRoot,
+    zkIdWorker,
     ...actions,
     writeState
   };

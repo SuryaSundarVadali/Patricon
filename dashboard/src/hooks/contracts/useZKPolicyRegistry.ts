@@ -1,12 +1,18 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  usePublicClient,
   useReadContract,
   useWatchContractEvent,
   useWriteContract
 } from "wagmi";
 
 import { PolicyRegistryAbi } from "../../generated/contracts";
+import { toFixedLengthSignals } from "../../lib/zk/proofUtils";
+import { verifyPolicyProofLocally } from "../../lib/zk/policyProof";
+import type { PolicyProofInput } from "../../lib/zk/zkTypes";
+import { getContractAddress, VerifierPolicyAbi } from "../../lib/contracts";
+import { usePolicyProofWorker } from "../usePolicyProofWorker";
 import { useContractResolution } from "./common";
 
 export type RegisterPolicyInput = {
@@ -17,6 +23,24 @@ export type RegisterPolicyInput = {
   active: boolean;
 };
 
+type VerifyPolicyAndAttachInput = {
+  proofInput: PolicyProofInput;
+  policyVersion: bigint;
+  circuitVersion: bigint;
+};
+
+type VerifyPolicyAndRegisterInput = {
+  proofInput: PolicyProofInput;
+  agent: `0x${string}`;
+  policyVersion: bigint;
+  circuitVersion: bigint;
+  active: boolean;
+};
+
+function toBytes32Hex(value: bigint): `0x${string}` {
+  return `0x${value.toString(16).padStart(64, "0")}`;
+}
+
 export function useZKPolicyRegistry(agent?: `0x${string}`) {
   const queryClient = useQueryClient();
   const {
@@ -26,6 +50,8 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
     disabledReason,
     missingDeployment
   } = useContractResolution("zkPolicyRegistry");
+  const publicClient = usePublicClient({ chainId });
+  const policyWorker = usePolicyProofWorker();
   const { writeContractAsync, ...writeState } = useWriteContract();
 
   const targetAgent = agent ?? account;
@@ -112,9 +138,145 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
           functionName: "selfRegisterPolicy",
           args: [policyHashValue, policyVersion, circuitVersion]
         });
+      },
+      verifyPolicyProofAndAttach: async (params: VerifyPolicyAndAttachInput) => {
+        const deployedAddress = ensureAddress();
+
+        if (!publicClient) {
+          throw new Error("Public client is unavailable for current chain.");
+        }
+
+        const verifierAddress = getContractAddress(chainId, "policyVerifier");
+        if (!verifierAddress) {
+          throw new Error("Policy verifier deployment is missing for current chain.");
+        }
+
+        const generated = await policyWorker.generate(params.proofInput);
+        const proofTimeMs = generated.elapsedMs;
+
+        const localVerified = await verifyPolicyProofLocally(generated.proof);
+        if (!localVerified) {
+          throw new Error("Policy proof did not pass local Groth16 verification.");
+        }
+
+        const policySignals = toFixedLengthSignals(
+          generated.proof.publicSignals,
+          14,
+          "policy public signals"
+        ) as [
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint
+        ];
+
+        const verificationStartedAt = performance.now();
+        const verifiedOnChain = await publicClient.readContract({
+          address: verifierAddress,
+          abi: VerifierPolicyAbi,
+          functionName: "verifyProof",
+          args: [generated.proof.proof.pA, generated.proof.proof.pB, generated.proof.proof.pC, policySignals]
+        });
+        const verificationTimeMs = performance.now() - verificationStartedAt;
+
+        if (!verifiedOnChain) {
+          throw new Error("Policy proof failed contract verifier precheck.");
+        }
+
+        const policyHashValue = toBytes32Hex(policySignals[2]);
+        const txHash = await writeContractAsync({
+          address: deployedAddress,
+          abi: PolicyRegistryAbi,
+          functionName: "selfRegisterPolicy",
+          args: [policyHashValue, params.policyVersion, params.circuitVersion]
+        });
+
+        return {
+          txHash,
+          proofTimeMs,
+          verificationTimeMs
+        };
+      },
+      verifyPolicyProofAndRegister: async (params: VerifyPolicyAndRegisterInput) => {
+        const deployedAddress = ensureAddress();
+
+        if (!publicClient) {
+          throw new Error("Public client is unavailable for current chain.");
+        }
+
+        const verifierAddress = getContractAddress(chainId, "policyVerifier");
+        if (!verifierAddress) {
+          throw new Error("Policy verifier deployment is missing for current chain.");
+        }
+
+        const generated = await policyWorker.generate(params.proofInput);
+        const proofTimeMs = generated.elapsedMs;
+
+        const localVerified = await verifyPolicyProofLocally(generated.proof);
+        if (!localVerified) {
+          throw new Error("Policy proof did not pass local Groth16 verification.");
+        }
+
+        const policySignals = toFixedLengthSignals(
+          generated.proof.publicSignals,
+          14,
+          "policy public signals"
+        ) as [
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint,
+          bigint
+        ];
+
+        const verificationStartedAt = performance.now();
+        const verifiedOnChain = await publicClient.readContract({
+          address: verifierAddress,
+          abi: VerifierPolicyAbi,
+          functionName: "verifyProof",
+          args: [generated.proof.proof.pA, generated.proof.proof.pB, generated.proof.proof.pC, policySignals]
+        });
+        const verificationTimeMs = performance.now() - verificationStartedAt;
+
+        if (!verifiedOnChain) {
+          throw new Error("Policy proof failed contract verifier precheck.");
+        }
+
+        const policyHashValue = toBytes32Hex(policySignals[2]);
+        const txHash = await writeContractAsync({
+          address: deployedAddress,
+          abi: PolicyRegistryAbi,
+          functionName: "registerOrUpdatePolicy",
+          args: [params.agent, policyHashValue, params.policyVersion, params.circuitVersion, params.active]
+        });
+
+        return {
+          txHash,
+          proofTimeMs,
+          verificationTimeMs
+        };
       }
     };
-  }, [address, disabledReason, writeContractAsync]);
+  }, [address, chainId, disabledReason, policyWorker, publicClient, writeContractAsync]);
 
   return {
     address,
@@ -124,6 +286,7 @@ export function useZKPolicyRegistry(agent?: `0x${string}`) {
     getVerifyingKey: undefined,
     policyHash,
     paused,
+    policyWorker,
     ...actions,
     writeState
   };
